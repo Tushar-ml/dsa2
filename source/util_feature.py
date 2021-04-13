@@ -4,26 +4,27 @@
 Methods for feature extraction and preprocessing
 util_feature: input/output is pandas
 """
-import copy
-import os
+import os, sys, copy, re, numpy as np, pandas as pd
 from collections import OrderedDict
-
-#import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import re
-
-
 #############################################################################################
-print("os.getcwd", os.getcwd())
+verbosity = 5
 
 def log(*s, n=0, m=1, **kw):
     sspace = "#" * n
     sjump = "\n" * m
-
     ### Implement Logging
     print(sjump, sspace, s, sspace, flush=True, **kw)
 
+def log2(*s, **kw):
+    if verbosity >=2 : print(*s, flush=True, **kw)
+
+def log3(*s, **kw):
+    if verbosity >=2 : print(*s, flush=True, **kw)
+
+log2("os.getcwd", os.getcwd())
+
+
+#############################################################################################
 class dict2(object):
     def __init__(self, d):
         self.__dict__ = d
@@ -36,6 +37,104 @@ def os_get_function_name():
 def os_getcwd():
     root = os.path.abspath(os.getcwd()).replace("\\", "/") + "/"
     return  root
+
+
+#############################################################################################
+def pa_read_file(path=  'folder_parquet/', 
+                 cols=None, n_rows=1000, file_start=0, file_end=100000, verbose=1, ) :
+    """Requied HDFS connection
+       http://arrow.apache.org/docs/python/parquet.html
+
+       conda install libhdfs3 pyarrow
+       in your script.py:
+        import os
+        os.environ['ARROW_LIBHDFS_DIR'] = '/opt/cloudera/parcels/CDH/lib64/'
+
+       https://stackoverflow.com/questions/18123144/missing-server-jvm-java-jre7-bin-server-jvm-dll
+       
+    """
+    import pyarrow as pa, gc, glob
+    import pyarrow.parquet as pq
+      
+    n_rows = 999999999 if n_rows < 0  else n_rows
+    
+    if "hdfs:" in path :
+       hdfs = pa.hdfs.connect()  
+       flist = hdfs.ls( path )  
+    else :  ###Local file
+       flist = glob.glob( path + "/*.parquet" )
+
+    flist = [ fi for fi in flist if  'hive' not in fi.split("/")[-1]  ]
+    flist = flist[file_start:file_end]  #### Allow batch load by partition
+    if verbose : print(flist)
+    dfall = None
+    for pfile in flist:
+        if not "parquet" in pfile :
+            continue
+        if verbose > 0 :print( pfile )            
+            
+        #arr_dataset = pq.ParquetDataset( pfile )
+        #arr_table   = arr_dataset.read(columns= cols)  ###load in RAM
+        #if verbose > 0 :
+        #   metadata = pq.read_metadata(pfile)
+        #   print(metadata)
+        
+        arr_table = pq.read_table(pfile, columns=cols)
+        df        = arr_table.to_pandas()
+        del arr_table; gc.collect()
+        
+        dfall = pd.concat((dfall, df)) if dfall is None else df
+        del df
+        if len(dfall) > n_rows :
+            break
+
+    if dfall is None : return None        
+    if verbose > 0 : print( dfall.head(2), dfall.shape )          
+    dfall = dfall.iloc[:n_rows, :]            
+    return dfall
+
+
+def pa_write_file(df, path=  'folder_parquet/', 
+                 cols=None,n_rows=1000, partition_cols=None, overwrite=True, verbose=1, filesystem = 'hdfs' ) :
+    """ Pandas to HDFS
+      pyarrow.parquet.write_table(table, where, row_group_size=None, version='1.0',
+      use_dictionary=True, compression='snappy', write_statistics=True, use_deprecated_int96_timestamps=None,
+      coerce_timestamps=None, allow_truncated_timestamps=False, data_page_size=None,
+      flavor=None, filesystem=None, compression_level=None, use_byte_stream_split=False, data_page_version='1.0', **kwargs)
+      
+      https://arrow.apache.org/docs/python/generated/pyarrow.parquet.write_to_dataset.html#pyarrow.parquet.write_to_dataset
+       
+    """
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    hdfs = pa.hdfs.connect()    
+    n_rows = 999999999 if n_rows < 0  else n_rows
+    df = df.iloc[:n_rows, :]
+    
+    table = pa.Table.from_pandas(df)
+    
+    if filesystem == 'hdfs' :
+      if overwrite :
+          hdfs.rm(path.replace("hdfs://", ""), recursive=True)
+      hdfs.mkdir(path.replace("hdfs://", ""))
+      pq.write_to_dataset(table, root_path=path,
+                          partition_cols=partition_cols, filesystem=hdfs)
+      flist = hdfs.ls( path )
+      print(flist)
+
+    else :
+        if overwrite :
+            os.removedirs(path)
+        os.makedirs(path, exist_ok=True)
+        pq.write_to_dataset(table, root_path=path,
+                            partition_cols=partition_cols, filesystem= None)
+        
+        flist = os.listdir( path )
+        print(flist)
+        
+
+
+
 
 
 
@@ -408,7 +507,7 @@ def load_function_uri(uri_name="myfolder/myfile.py::myFunction"):
 
     try:
         #### Import from package mlmodels sub-folder
-        return  getattr(importlib.import_module(package), name)
+        return  getattr(importlib.import_module(package), class_name)
 
     except Exception as e1:
         try:
@@ -655,6 +754,7 @@ def test_mutualinfo(error, Xtest, colname=None, bins=5):
 ####################################################################################################
 def feature_importance_perm(clf, Xtrain, ytrain, cols, n_repeats=8, scoring='neg_root_mean_squared_error',
                             show_graph=1):
+    from matplotlib import pyplot as plt
     from sklearn.inspection import permutation_importance
     result = permutation_importance(clf, Xtrain[cols], ytrain, n_repeats=n_repeats,
                                     random_state=42, scoring=scoring)
@@ -707,6 +807,7 @@ def feature_selection_multicolinear(df, threshold=1.0):
 def feature_correlation_cat(df, colused):
     from scipy.stats import spearmanr
     from scipy.cluster import hierarchy
+    from matplotlib import pyplot as plt
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 8))
     corr = spearmanr(df[colused]).correlation  # Ordinalon
@@ -1043,9 +1144,33 @@ def pd_colnum_normalize(df0, colname, pars, suffix="_norm", return_val='datafram
             try:
                 if t['name'] == 'log'         : df[x] = np.log(df[x].values.astype(np.float64))
                 if t['name'] == 'fillna'      : df[x] = df[x].fillna( t['na_val'] )
-                if t['name'] == 'minmax_norm' : df[x] = (df[x] - df[x].min() )/ ( df[x].max() - df[x].min() )
+                if t['name'] == 'minmax' : 
+                  minx = df[x].min()
+                  df[x] = (df[x] - minx )/ ( df[x].max() - minx )
+
+                if t['name'] == 'stdev' : 
+                  sd    = df[x].std()
+                  df[x] = (df[x] - minx )/ ( 2* sd )
+
+                if t['name'] == 'quantile_cutoff' : 
+                  s1 = df[x].quantile(0.90)
+                  s0 = df[x].quantile(0.10)
+                  # me = df[x].median()
+                  df[x]  = (df[x] - s0 )/ ( s1-s0 )
+                  cutmin, cutmax = 0.0, 1.0 
+                  df[x] = df[x].apply(lambda x : max( min(x, cutmax ), cutmin)  )
+
+                if t['name'] == 'quantile_cutoff_2' : 
+                  s1 = df[x].quantile(0.90)
+                  s0 = df[x].quantile(0.10)
+                  me = df[x].median()
+
+                  df[x]  = (df[x] - me )/ ( s1-s0 )
+                  cutmin, cutmax = -1.0, 1.0
+                  df[x] = df[x].apply(lambda x : max( min(x, cutmax ), cutmin)  )
+
             except Exception as e:
-                pass
+                log('pd_colnum_normalize',t, e)
 
     df.columns  = [ t + suffix for t in df.columns ]
     colnum_norm = list(df.columns)
@@ -1205,41 +1330,44 @@ def pd_stat_pandas_profile(df, savefile="report.html", title="Pandas Profile"):
     return colexclude
 
 
-def pd_stat_distribution_colnum(df):
-    """ Describe the tables
-   """
-    coldes = ["col", "coltype", "dtype", "count", "min", "max", "nb_na", "pct_na", "median", "mean", "std", "25%", "75%", "outlier",]
+def pd_stat_distribution_colnum(df, nrows=2000, verbose=False):
+    """ Stats the tables
+    """
+    df = df.sample(n=nrows)
+    coldes = ["col", "coltype",  "count", "min", "max",  "median", "mean", 
+              "std", "25%", "75%", "nb_na", "pct_na" ]
 
     def getstat(col):
+        """max, min, nb, nb_na, pct_na, median, qt_25, qt_75,
+           nb, nb_unique, nb_na, freq_1st, freq_2th, freq_3th
+           s.describe()
         """
-         max, min, nb, nb_na, pct_na, median, qt_25, qt_75,
-         nb, nb_unique, nb_na, freq_1st, freq_2th, freq_3th
-         s.describe()
-         count    3.0  mean     2.0 std      1.0
-         min      1.0   25%      1.5  50%      2.0
-         75%      2.5  max      3.0
-      """
-        ss = list(df[col].describe().values)
-        ss = [str(df[col].dtype)] + ss
-        nb_na = df[col].isnull().sum()
-        ntot = len(df)
-        ss = ss + [nb_na, nb_na / (ntot + 0.0)]
+        ss    = [col, str(df[col].dtype)] 
+        ss    = ss +list(df[col].describe().values) 
 
-        return pd.Series(
-            ss,
-            ["dtype", "count", "mean", "std", "min", "25%", "50%", "75%", "max", "nb_na", "pct_na"],
-        )
+        nb_na = df[col].isnull().sum()
+        ntot  = len(df)
+        ss    = ss + [nb_na, nb_na / (ntot + 0.0)]
+
+        return pd.DataFrame( [ss],  columns=coldes, )
 
     dfdes = pd.DataFrame([], columns=coldes)
-    cols = df.columns
+    cols  = df.columns
     for col in cols:
         dtype1 = str(df[col].dtype)
         if dtype1[0:3] in ["int", "flo"]:
-            row1 = getstat(col)
-            dfdes = pd.concat((dfdes, row1))
+            try :
+              row1  = getstat(col)
+              dfdes = pd.concat((dfdes, row1), axis=0)
+            except Exception as e:
+              print('error', col, e)  
 
         if dtype1 == "object":
             pass
+
+    dfdes.index = np.arange(0, len(dfdes))        
+    if verbose : print('Stats\n', dfdes)
+    return dfdes
 
 
 def pd_stat_histogram(df, bins=50, coltarget="diff"):

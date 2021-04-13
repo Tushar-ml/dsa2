@@ -7,7 +7,8 @@ python torch_ease.py test
 
 """
 import os, sys,copy, pathlib, pprint, json, pandas as pd, numpy as np, scipy as sci, sklearn
-
+import wget, zipfile
+import scipy.sparse as scipy_sparse
 ####################################################################################################
 try   : verbosity = int(json.load(open(os.path.dirname(os.path.abspath(__file__)) + "/../../config.json", mode='r'))['verbosity'])
 except Exception as e : verbosity = 2
@@ -50,7 +51,7 @@ import torch
 from torch import nn
 from torch import optim
 from torch.nn import functional as F
-
+from sklearn.model_selection import train_test_split
 ##### Add custom repo to Python Path ################################################################
 thisfile_dirpath = os.path.dirname(os.path.abspath(__file__)).replace("\\", "/")
 import_path      = thisfile_dirpath + "/repo/TorchEASE/"
@@ -59,27 +60,34 @@ sys.path.append(import_path)
 ##### Import from src/core_models/
 from main.EASE import TorchEASE
 
+from rectorch.data import Dataset
+from rectorch.samplers import SparseDummySampler
+from rectorch.models.mf import EASE
 ##### pkg
 path_pkg =  thisfile_dirpath + "/repo/TorchEASE/"
 
 
 ####################################################################################################
 class Model(object):
-    def __init__(self, model_pars=None, data_pars=None, compute_pars=None, global_pars=None):
-        self.model_pars, self.compute_pars, self.data_pars, self.global_pars = model_pars, compute_pars, data_pars, global_pars
+    def __init__(self, model_pars=None, data_pars=None, compute_pars=None):
+        
         if model_pars is None:
             self.model = None
             return 
 
-        # Fuse all params for RVAE 
-        model_pars2 = copy.deepcopy(self.model_pars['model_pars'])
-        model_pars2.update(self.compute_pars['compute_pars'])
-        model_pars2.update(self.compute_pars['compute_extra'])
-        model_pars2.update(self.data_pars)
-        model_pars2.update(self.global_pars)
+        # # Fuse all params for RVAE 
+        # model_pars2 = copy.deepcopy(self.model_pars['model_pars'])
+        # model_pars2.update(self.compute_pars['compute_pars'])
+        # model_pars2.update(self.compute_pars['compute_extra'])
+        # model_pars2.update(self.data_pars)
+        # model_pars2.update(self.global_pars)
 
+        n_samples = data_pars["n_sample"]
+        train_df = data_pars["df"].iloc[:n_samples]
         # self.args = model_pars2
-        self.model = TorchEASE( **model_pars2)
+        self.model = TorchEASE(
+            train_df, user_col="user_id", item_col="book_id", score_col="rating", reg=250.0
+        )
         log2(self.model)
 
 
@@ -155,26 +163,21 @@ def fit(data_pars=None, compute_pars=None, out_pars=None, **kw):
     global model, session
     session = None  # Session type for compute
 
-    X_train, target_errors_train, dataset_obj, attributes = get_dataset(
-        data_pars, task_type='train'
-    )
+    # X_train, target_errors_train, dataset_obj, attributes = get_dataset(
+    #     data_pars, task_type='train'
+    # )
 
-    model.model.fit(Xtrain, y_train)
+    model.model.fit()
 
 
 
 def predict(Xpred=None, data_pars=None, compute_pars={}, out_pars={}, **kw):
     global model, session
     if Xpred is None:
-        dataloader = get_dataset(data_pars, task_type='predict')
-        
-        # One batch to predict on
-        one_batch = next(iter(dataloader))
+        Xpred = data_pars["df"]
+        colcat = data_pars["cols_input_type"]["colcat"]
 
-        # Get X from batch
-        Xpred = one_batch[0]
-
-    ypred = model.model(Xpred)
+    ypred = model.model.predict_all(Xpred[colcat])
 
     return ypred
 
@@ -298,12 +301,24 @@ def get_dataset2(data_pars=None, task_type="train", **kw):
 
 def test_dataset_goodbooks(nrows=1000):
     from sklearn.preprocessing import LabelEncoder
+    data_path = "./goodbooks_dataset"
+    if not os.path.isdir(data_path):
+        os.makedirs(data_path, exist_ok=True)
+    
+        wget.download(
+            "https://github.com/zygmuntz/goodbooks-10k/releases/download/v1.0/goodbooks-10k.zip",
+            out=data_path
+        )
+
+        with zipfile.ZipFile(f"{data_path}/goodbooks-10k.zip") as zip_ref:
+            zip_ref.extractall(data_path)
+    df = pd.read_csv(data_path + "/ratings.csv")
     # Dense features
     coly = ['rating',  ]
 
     # Sparse features
-    colcat = ['user_id', 'item_id' ]
-
+    colcat = ['user_id', 'book_id' ]
+    colnum = []
     return df, colnum, colcat, coly
 
 
@@ -323,6 +338,79 @@ def train_test_split2(df, coly):
     return X,y, X_train, X_valid, y_train, y_valid, X_test,  y_test, num_classes
 
 
+def make_rand_sparse_dataset(
+        n_rows=1000,
+    ):
+    # we need a single source of all user_ids and item_ids 
+    # to avoid ids apearing in test that wasn't available in train
+    all_train_data = np.random.randint(0, 10000000, (n_rows, 2)).astype(np.int32)
+
+    # Split data
+    train_data, val_data = train_test_split(all_train_data, test_size=0.1, shuffle=True)
+    val_data, test_data = train_test_split(val_data, test_size=0.5)
+
+    # add val to train_data and create df
+    val = np.ones((train_data.shape[0],1)).astype(np.int32)
+    train_data = np.hstack((train_data, val))
+    train_set_df = pd.DataFrame(
+        data=train_data 
+    )
+
+    # add val to val_data and create df
+    val = np.ones((val_data.shape[0],1))
+    val_data = np.hstack((val_data, val))
+    val_set_df = pd.DataFrame(
+        data=val_data
+    )
+
+    # add val to test_data and create df
+    val = np.ones((test_data.shape[0],1))
+    test_data = np.hstack((test_data, val))
+    test_set_df = pd.DataFrame(
+        data=test_data
+    )
+    
+    ds = Dataset(
+        uids=np.unique(all_train_data[:,0]).astype(np.int32),
+        iids=np.unique(all_train_data[:,1]).astype(np.int32),
+        train_set=train_set_df,
+        valid_set=val_set_df,
+        test_set=test_set_df
+    )
+
+    train_sampler = SparseDummySampler(
+        data=ds,
+        mode='train',
+        batch_size=128,
+        shuffle=True
+    )
+
+    return train_sampler 
+
+    
+def test_sparse(n_sample=1000):
+
+    train_sampler = make_rand_sparse_dataset(
+        n_rows=1000,
+    )
+
+    model = EASE()
+    
+    log("Training...")
+
+    model.train(train_sampler)
+    test_te = train_sampler.data_te
+
+    test_uids = np.random.choice(train_sampler.data.unique_uid, 500)
+    uid_to_internal_rectorch_id = lambda uid: train_sampler.data.u2id[uid]
+    id_mapper = np.vectorize(uid_to_internal_rectorch_id)
+    test_mapped_ids = id_mapper(test_uids)
+
+    log("Predicting...")
+    
+    res = model.predict(test_mapped_ids, test_te, False)
+    log(res)
+
 
 def test(n_sample          = 1000):
     df, colnum, colcat, coly = test_dataset_goodbooks(nrows= n_sample)
@@ -333,7 +421,7 @@ def test(n_sample          = 1000):
     def pre_process_fun(y):  return int(y)
 
     m = {'model_pars': {
-        'model_class':  "model_vaem.py::VAEMDN"
+        'model_class':  "model_vaem.py::EASE"
         ,'model_pars' : {
             'original_dim':       len( colcat + colnum),
             'class_num':             2,
@@ -355,7 +443,8 @@ def test(n_sample          = 1000):
                       'compute_pars' : {'epochs': 1 },
                     },
 
-    'data_pars': { 'n_sample' : n_sample,
+    'data_pars': { 
+        'n_sample' : n_sample,
         'download_pars' : None,
         'cols_input_type' : {
             'colcat' : colcat,
@@ -372,10 +461,11 @@ def test(n_sample          = 1000):
         }
 
         ### Filter data rows   ##################################################################
-        ,'filter_pars': { 'ymax' : 2 ,'ymin' : -1 }
+        ,'filter_pars': { 'ymax' : 2 ,'ymin' : -1 },
 
 
         ###################################################
+        'df' : df
         ,'train':   {'Xtrain': X_train,  'ytrain': y_train, 'Xtest':  X_valid,  'ytest':  y_valid}
         ,'eval':    {'X': X_valid,  'y': y_valid}
         ,'predict': {'X': X_valid}
@@ -399,17 +489,17 @@ def test_helper(model_pars, data_pars, compute_pars):
     fit(data_pars=data_pars, compute_pars=compute_pars)
 
     log('Predict data..')
-    ypred, ypred_proba = predict(data_pars=data_pars,compute_pars=compute_pars)
+    ypred = predict(data_pars=data_pars,compute_pars=compute_pars)
     log(f'Top 5 y_pred: {np.squeeze(ypred)[:5]}')
 
 
-    log('Saving model..')
-    save(path= root + '/model_dir/')
+    # log('Saving model..')
+    # save(path= root + '/model_dir/')
 
-    log('Model architecture:')
-    log(model.model.summary())
+    # log('Model architecture:')
+    # log(model.model.summary())
 
-    log('Model Snapshot')
+    # log('Model Snapshot')
     # model_summary()
 
 

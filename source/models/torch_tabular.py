@@ -33,8 +33,11 @@ Args:
 import os, sys,copy, pathlib, pprint, json, pandas as pd, numpy as np, scipy as sci, sklearn
 
 ####################################################################################################
-try   : verbosity = int(json.load(open(os.path.dirname(os.path.abspath(__file__)) + "/../../config.json", mode='r'))['verbosity'])
-except Exception as e : verbosity = 4
+from utilmy import global_verbosity, os_makedirs
+
+verbosity = global_verbosity(__file__, "/../../config.json", default=3)
+#try   : verbosity = int(json.load(open(os.path.dirname(os.path.abspath(__file__)) + "/../../config.json", mode='r'))['verbosity'])
+#except Exception as e : verbosity = 4
 #raise Exception(f"{e}")
 
 def log(*s):
@@ -46,9 +49,6 @@ def log2(*s):
 def log3(*s):
     if verbosity >= 3 : print(*s, flush=True)
 
-def os_makedirs(dir_or_file):
-    if os.path.isfile(dir_or_file) :os.makedirs(os.path.dirname(os.path.abspath(dir_or_file)), exist_ok=True)
-    else : os.makedirs(os.path.abspath(dir_or_file), exist_ok=True)
 
 ####################################################################################################
 global model, session
@@ -307,33 +307,6 @@ def get_dataset(data_pars=None, task_type="train", **kw):
 
 ####################################################################################################
 ############ Test  #################################################################################
-def test_dataset_covtype(nrows=1000):
-    # Dense features
-    colnum = ["Elevation", "Aspect", "Slope", "Horizontal_Distance_To_Hydrology", "Vertical_Distance_To_Hydrology", "Horizontal_Distance_To_Roadways", "Hillshade_9am" , "Hillshade_Noon",  "Hillshade_3pm", "Horizontal_Distance_To_Fire_Points"]
-
-    # Sparse features
-    colcat = ["Wilderness_Area1",  "Wilderness_Area2", "Wilderness_Area3", "Wilderness_Area4",  "Soil_Type1",  "Soil_Type2",  "Soil_Type3", "Soil_Type4",  "Soil_Type5",  "Soil_Type6",  "Soil_Type7",  "Soil_Type8",  "Soil_Type9", "Soil_Type10",  "Soil_Type11",  "Soil_Type12",  "Soil_Type13",  "Soil_Type14", "Soil_Type15",  "Soil_Type16",  "Soil_Type17",  "Soil_Type18",  "Soil_Type19", "Soil_Type20",  "Soil_Type21",  "Soil_Type22",  "Soil_Type23",  "Soil_Type24", "Soil_Type25",  "Soil_Type26",  "Soil_Type27",  "Soil_Type28",  "Soil_Type29", "Soil_Type30",  "Soil_Type31",  "Soil_Type32",  "Soil_Type33",  "Soil_Type34", "Soil_Type35",  "Soil_Type36",  "Soil_Type37",  "Soil_Type38",  "Soil_Type39", "Soil_Type40",  ]
-    
-    # Target column
-    coly        = ["Covertype"]
-
-    root = os.path.join(os.getcwd() ,"ztmp")
-    BASE_DIR = Path.home().joinpath( root, 'data/input/covtype/')
-    datafile = BASE_DIR.joinpath('covtype.data.gz')
-    datafile.parent.mkdir(parents=True, exist_ok=True)
-    url = "https://archive.ics.uci.edu/ml/machine-learning-databases/covtype/covtype.data.gz"
-    
-    # Download the dataset in case it's missing
-    if not datafile.exists():
-        wget.download(url, datafile.as_posix())
-
-    # Read nrows of only the given columns 
-    feature_columns = colnum + colcat + coly
-    df = pd.read_csv(datafile, header=None, names=feature_columns, nrows=nrows)
-    df[coly] = df[coly].astype('uint8')
-    return df, colnum, colcat, coly
-
-
 def train_test_split2(df, coly):
     log3(df.dtypes)
     X,y = df.drop(coly,  axis=1), df[coly]
@@ -344,13 +317,18 @@ def train_test_split2(df, coly):
     return X,y, X_train, X_valid, y_train, y_valid, X_test,  y_test, num_classes
 
 
+
 def test(n_sample = 100):
     """
         nrows : take first nrows from dataset
     """
     global model, session
-    df, colnum, colcat, coly = test_dataset_covtype()
+
+    from adatasets import test_dataset_classifier_covtype
+    df, p                = test_dataset_classifier_covtype(nrows=n_sample)
+    colnum, colcat, coly = p['colnum'], p['colcat'],p['coly']
     X,y, X_train, X_valid, y_train, y_valid, X_test,  y_test, num_classes = train_test_split2(df, coly)
+    # df, colnum, colcat, coly = test_dataset_covtype()
 
     #### Matching Big dict  ##################################################
     cols_input_type_1 = []
@@ -511,7 +489,9 @@ def test3(n_sample = 100):
         nrows : take first nrows from dataset
     """
     global model, session
-    df, colnum, colcat, coly = test_dataset_covtype()
+    from adatasets import test_dataset_classifier_covtype
+    df, p                = test_dataset_classifier_covtype(nrows=n_sample)
+    colnum, colcat, coly = p['colnum'], p['colcat'],p['coly']
     X,y, X_train, X_valid, y_train, y_valid, X_test,  y_test, num_classes = train_test_split2(df, coly)
 
     #### Matching Big dict  ##################################################
@@ -745,13 +725,11 @@ if __name__ == "__main__":
 
 
 
-
+"""
 
 def get_dataset2(data_pars=None, task_type="train", **kw):
-    """
-      "ram"  :
-      "file" :
-    """
+    #  "ram"  :
+    #  "file" :
     # log(data_pars)
     data_type = data_pars.get('type', 'ram')
     if data_type == "ram":
@@ -772,3 +750,4 @@ def get_dataset2(data_pars=None, task_type="train", **kw):
 
     raise Exception(f' Requires  Xtrain", "Xtest", "ytrain", "ytest" ')
 
+"""

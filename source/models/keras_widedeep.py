@@ -13,9 +13,8 @@ pip install Keras==2.4.3
 import os, sys,copy, pathlib, pprint, json, pandas as pd, numpy as np, scipy as sci, sklearn
 
 ####################################################################################################
-try   : verbosity = int(json.load(open(os.path.dirname(os.path.abspath(__file__)) + "/../../config.json", mode='r'))['verbosity'])
-except Exception as e : verbosity = 2
-#raise Exception(f"{e}")
+from utilmy import global_verbosity, os_makedirs, pd_read_file
+verbosity = global_verbosity(__file__,"/../../config.json", 3 )
 
 def log(*s):
     print(*s, flush=True)
@@ -26,9 +25,6 @@ def log2(*s):
 def log3(*s):
     if verbosity >= 3 : print(*s, flush=True)
 
-def os_makedirs(dir_or_file):
-    if os.path.isfile(dir_or_file) :os.makedirs(os.path.dirname(os.path.abspath(dir_or_file)), exist_ok=True)
-    else : os.makedirs(os.path.abspath(dir_or_file), exist_ok=True)
 
 ####################################################################################################
 global model, session
@@ -54,7 +50,7 @@ from tensorflow.keras import layers
 
 
 ####################################################################################################
-cols_ref_formodel = ['colcontinuous','colsparse']
+THISMODEL_COLGROUPS = ['colcontinuous', 'colsparse']
 
 def WideDeep_sparse(model_pars2):
     """ Using TF feature column sparse tensor
@@ -134,74 +130,69 @@ class Model(object):
 
 
 #####################################################################################################
-def fit(data_pars, compute_pars):
-    """
+def fit(data_pars=None, compute_pars=None, out_pars=None):
+    """  Fit model
     """
     global model,session
+    cpars            = copy.deepcopy( compute_pars.get("compute_pars", {}) )
+    cpars['epochs']  = cpars.get('epochs', 1)
+    cpars['verbose'] = cpars.get('verbose',1)
+
+    batch_size      = compute_pars.get('batch_size',2)
+    path_checkpoint = compute_pars.get('path_checkpoint','ztmp_checkpoint/model_.pth')
+    early_stopping  = EarlyStopping(monitor='loss', patience=3)
+    model_ckpt      = ModelCheckpoint(filepath = path_checkpoint,save_best_only=True, monitor='loss')
+    cpars_ex = copy.deepcopy( compute_pars.get("compute_extra", {}) )
+
+
+    ###  Xtrain can be a path string (not DF)   ###########################################
+    Xtrain,Ytrain, Xtest,Ytest= get_dataset_split(data_pars, task_type="train")
+
+    ### Coupling Data X Model Input
     if 'sparse' in  model.model_pars['model_class'] :
-        
-        train_df = data_pars['train']
-        if 'val' in data_pars:
-            val_df = train_df['X_test']
-        else:
-            val_df = None
-            validation_split = 0.2
-    
-        epochs          = compute_pars.get('epochs', 1)
-        verbose         = compute_pars.get('verbose',1)
-        path_checkpoint = compute_pars.get('path_checkpoint','ztmp_checkpoint/model_.pth')
-        early_stopping  = EarlyStopping(monitor='loss', patience=3)
-        model_ckpt      = ModelCheckpoint(filepath = path_checkpoint,save_best_only=True, monitor='loss')
-                
-        if val_df:
-            hist = model.model.fit(train_df['X_train'],epochs=epochs,verbose=verbose,validation_data=train_df['X_test'])
-        else:
-            hist = model.model.fit(train_df['X_train'],epochs=epochs,verbose=verbose,validation_split=0.1)
-    
+        log2('Fitting Sparse input...')
+        Xy_train = get_dataset_split_for_model_tfsparse(Xtrain, Ytrain, data_pars)
+        Xy_val   = get_dataset_split_for_model_tfsparse(Xtest,  Ytest,  data_pars)
+
+        hist   = model.model.fit(Xy_train, validation_data=Xy_val, **cpars)
         model.history = hist
 
     else :
-        
-        Xtrain,Ytrain, Xtest,Ytest= get_dataset(data_pars, task_type="train")
-        
-        #log(dir(Xtrain_tuple))
+        log2('Fitting Dense input...')
+        Xtrain,Ytrain = get_dataset_split_for_model_pandastuple(Xtrain, Ytrain, data_pars)
+        Xy_train      = tf.data.Dataset.zip(((Xtrain,Xtrain,Xtrain), Ytrain)).batch(batch_size)
+
+        Xtest,Ytest   = get_dataset_split_for_model_pandastuple(Xtest,  Ytest,  data_pars)
+        Xy_val        = tf.data.Dataset.zip(((Xtest,Xtest,Xtest), Ytest)).batch(batch_size)
         #log(next(Xtrain_tuple.make_initializable_iterator())[0].numpy)
-        cpars = compute_pars.get("compute_pars", {})
-        epochs          = compute_pars.get('epochs',10)
-        verbose         = compute_pars.get('verbose',1)
-        path_checkpoint = compute_pars.get('path_checkpoint','ztmp_checkpoint/model_.pth')
-        early_stopping  = EarlyStopping(monitor='loss', patience=3)
-        model_ckpt      = ModelCheckpoint(filepath = path_checkpoint,save_best_only=True, monitor='loss')
-        log('Fitting the Model on XTrain...')
-        input_with_labels = tf.data.Dataset.zip(((Xtrain,Xtrain,Xtrain), Ytrain)).batch(32)
-        test_with_labels = tf.data.Dataset.zip(((Xtest,Xtest,Xtest), Ytest)).batch(32)
-        hist = model.model.fit(input_with_labels, validation_data=test_with_labels, **cpars)
+
+        hist     = model.model.fit(Xy_train, validation_data=Xy_val, **cpars)
         model.history = hist
+
 
 
 def predict(Xpred=None,data_pars=None, compute_pars=None, out_pars=None):
     global model, session
+    if Xpred is None :
+        Xpred = get_dataset_split(data_pars, task_type="predict")
+
+
     if 'sparse' in  model.model_pars['model_class'] :
-        if Xpred is None :
-            Xpred = data_pars['predict']['X']
-            
+        Xpred       = get_dataset_split_for_model_tfsparse(Xpred, None, data_pars)
         ypred_proba = model.model.predict(Xpred)        
         ypred       = [  1 if t > 0.5 else 0 for t in ypred_proba ]    
-        if compute_pars.get("probability", False):
-            return ypred, ypred_proba
-        else :
-            return ypred, None
+
     else :
-        if Xpred is None :
-            Xpred = data_pars['predict']['X']
-            Ypred = data_pars['predict']['y']
-        testdata = tf.data.Dataset.zip(((Xpred,Xpred,Xpred),Ypred)).batch(32)
+        Xpred,_  = get_dataset_split_for_model_pandastuple(Xpred, None, data_pars)
+        testdata = tf.data.Dataset.zip(((Xpred,Xpred,Xpred),)).batch(32)
         ypred_proba = model.model.predict(testdata)        
         ypred       = [  1 if t > 0.5 else 0 for t in ypred_proba ]    
-        if compute_pars.get("probability", False):
-            return ypred, ypred_proba
-        else :
-            return ypred, None
+
+    ################################################################
+    if compute_pars.get("probability", False):
+        return ypred, ypred_proba
+    else :
+        return ypred, None
 
 
 def save(path=None, info=None):
@@ -254,6 +245,89 @@ def model_summary(path="ztmp/"):
 
 
 ########################################################################################################################
+def get_dataset_split(data_pars=None, task_type="train", **kw):
+    """
+       Grab the splitting of data_pars DICT
+    """
+    if task_type == "predict":
+        d            = data_pars[task_type]
+        Xtrain       = d["X"]
+        return Xtrain
+
+    if task_type == "eval":
+        d               = data_pars[task_type]
+        Xtrain, ytrain  = d["X"], d["y"]
+        return Xtrain, ytrain
+
+    if task_type == "train":
+        d                             = data_pars[task_type]
+        Xtrain, ytrain, Xtest, ytest  = d["X_train"], d.get("Y_train", None), d["X_test"], d.get("Y_test", None)
+        return Xtrain, ytrain, Xtest,ytest
+
+
+def get_dataset_split_for_model_pandastuple(Xtrain, ytrain=None, data_pars=None, ):
+    """  Split data for moel input/
+    Xtrain  ---> Split INTO  tuple of data  Xtuple= (df1, df2, df3) to fit model input.
+
+    :param Xtrain:
+    :param coldataloader_received:
+    :param colmodel_ref:
+    :return:
+    """
+    coldataloader_received,  = data_pars.get('cols_model_type2', {})
+    colmodel_ref             = THISMODEL_COLGROUPS
+
+    ### Into RAM
+    if isinstance(Xtrain, str) : Xtrain = pd_read_file(Xtrain, verbose=False)
+    if isinstance(ytrain, str) : ytrain = pd_read_file(ytrain, verbose=False)
+
+
+    if len(colmodel_ref) <= 1 :   ## No split
+        return Xtrain
+
+    ### Split the pandas columns into different pieces  ######################
+    Xtuple_train = []
+    for cols_groupname in colmodel_ref :
+        assert cols_groupname in coldataloader_received, "Error missing colgroup in  data_pars[cols_model_type] "
+        cols_name_list = coldataloader_received[cols_groupname]
+        Xtuple_train.append( Xtrain[cols_name_list] )
+
+    return Xtuple_train, ytrain
+
+
+def get_dataset_split_for_model_petastorm(Xtrain, ytrain=None, pars:dict=None):
+    """  Split data for moel input/
+    Xtrain  ---> Split INTO  tuple PetaStorm Reader
+    https://github.com/uber/petastorm/blob/master/petastorm/reader.py#L61-L134
+
+    :param Xtrain:  path
+    :param cols_type_received:
+    :param cols_ref:
+    :return:
+    """
+    from petastorm.reader import Reader, make_batch_reader
+    from petastorm.tf_utils import make_petastorm_dataset
+
+    dataset_url_train = Xtrain
+    batch_size = 128
+    num_classes = 10
+    epochs = 12
+
+    train_reader  = make_batch_reader( dataset_url_train, num_epochs=epochs)
+    train_dataset = make_petastorm_dataset(train_reader)
+
+    ### Re-shape  #############################################
+    train_dataset = train_dataset.map(lambda x: (tf.reshape(x.image, (28, 28, 1)), tf.reshape(x.digit, [1])))
+
+
+
+    ###########################################################
+    train_dataset = train_dataset.batch(batch_size, drop_remainder=True)
+    return train_dataset
+
+
+
+
 class tf_FeatureColumns:
     """
        Coupling between Abstract definition of data vs Actual Data values
@@ -289,18 +363,20 @@ class tf_FeatureColumns:
         if labels:
             return data,labels,shape
         return data,None,shape
-    
-    def data_to_tensorflow(self,df, target,model='sparse',shuffle_train=False,shuffle_test=False,shuffle_val=False,batch_size=32,
+
+
+    def data_to_tensorflow_split(self,df, target,model='sparse',shuffle_train=False,shuffle_test=False,shuffle_val=False,batch_size=32,
                            test_split=0.2, colnum=[], colcat=[]):
-        
+
         for c in colcat:
             df[c] =  df[c].astype(str)
-        #df = pd.get_dummies(df)
+
         if test_split is not None :
             train_df,test_df = train_test_split(df,test_size=test_split)
             train_df,val_df  = train_test_split(train_df,test_size=0.1)
             log('Files Splitted')
             self.train,self.val,self.test = train_df,val_df,test_df
+
         if model=='sparse':
             self.train_df_tf = self.df_to_dataset(self.train,target=target,shuffle=shuffle_train, batch_size=batch_size)
             self.test_df_tf  = self.df_to_dataset(self.test,target=target, shuffle=shuffle_test,  batch_size=batch_size)
@@ -315,6 +391,27 @@ class tf_FeatureColumns:
             self.val_data,self.val_label,_ = self.df_to_dataset_dense(self.val,target=target,shuffle=shuffle_train,batch_size=batch_size)
 
             return self.train_data,self.train_label,self.test_data,self.test_label,self.val_data,self.val_label,shape
+
+
+    def data_to_tensorflow(self,df, target,model='sparse',shuffle_train=False,shuffle_test=False,shuffle_val=False,batch_size=32,
+                           colnum=[], colcat:list=[]):
+
+        for c in colcat:
+            df[c] =  df[c].astype(str)  ### TF wants String for category
+
+        self.train = df
+
+        if model=='sparse':
+            self.train_df_tf = self.df_to_dataset(self.train,target=target,shuffle=shuffle_train, batch_size=batch_size)
+            log('Datasets Converted to Tensorflow')
+            return self.train_df_tf, None, None
+
+        else:
+            self.train_data,self.train_label,shape = self.df_to_dataset_dense(self.train,target=target,
+                                                                              shuffle=shuffle_train,batch_size=batch_size)
+            return self.train_data, self.train_label, shape
+
+
     ################## To PLUG INTO  model
     def numeric_columns(self,columnsName):
         for header in columnsName:
@@ -385,115 +482,57 @@ class tf_FeatureColumns:
 
 
 
-def get_dataset_tuple(Xtrain, cols_type_received, cols_ref):
-    """  Split into Tuples to feed  Xyuple = (df1, df2, df3)
+def get_dataset_split_for_model_tfsparse(Xtrain, ytrain=None, pars:dict=None):
+    """  Split data for moel input/
+    Xtrain  ---> Split INTO  tuple of data  Xtuple= (df1, df2, df3) to fit model input.
+
     :param Xtrain:
-    :param cols_type_received:
-    :param cols_ref:
+    :param coldataloader_received:
+    :param colmodel_ref:
     :return:
     """
-    if len(cols_ref) < 1 :
-        return Xtrain
+    log3("Xtrain type", Xtrain)
 
-    Xtuple_train = []
-    for cols_groupname in cols_ref :
-        assert cols_groupname in cols_type_received, "Error missing colgroup in config data_pars[cols_model_type] "
-        cols_i = cols_type_received[cols_groupname]
-        Xtuple_train.append( Xtrain[cols_i] )
+    if isinstance(Xtrain, str) :
+        from utilmy import pd_read_file
+        Xtrain  = pd_read_file(Xtrain, verbose=False)  ## in Memory
+        log3('Xtrain laoded', Xtrain)
 
-    if len(cols_ref) == 1 :
-        return Xtuple_train[0]  ### No tuple
+    if isinstance(Xtrain, tf.data.Dataset) :
+       train_tfdata = Xtrain
+
     else :
-        return Xtuple_train
+        colnum   = pars['data_pars']['colnum']
+        colcat   = pars['data_pars']['colcat']
+        coly     = pars['data_pars']['coly']
+        # colembed = pars['data_pars']['colembed_dict']
+        assert isinstance(Xtrain, pd.DataFrame), 'Xtrain not dataframe'
 
+        prepare          = tf_FeatureColumns()
+        train_tfdata,_,_ = prepare.data_to_tensorflow(Xtrain, model='sparse', target= coly,
+                                                  colcat=colcat, colnum=colnum)
+        log3(train_tfdata)
 
+    return train_tfdata
 
-def get_dataset(data_pars=None, task_type="train", **kw):
-    """
-      return tuple of dataframes
-    """
-    # log(data_pars)
-    data_type = data_pars.get('type', 'ram')
-    cols_ref  = cols_ref_formodel
-
-    if data_type == "ram":
-        # cols_ref_formodel = ['cols_cross_input', 'cols_deep_input', 'cols_deep_input' ]
-        ### dict  colgroup ---> list of colname
-        cols_type_received     = data_pars.get('cols_model_type2', {} )  ##3 Sparse, Continuous
-
-        if task_type == "predict":
-            d = data_pars[task_type]
-            Xtrain       = d["X"]
-            Xtuple_train = get_dataset_tuple(Xtrain, cols_type_received, cols_ref_formodel)
-            return Xtuple_train
-
-        if task_type == "eval":
-            d = data_pars[task_type]
-            Xtrain, ytrain  = d["X"], d["y"]
-            Xtuple_train    = get_dataset_tuple(Xtrain, cols_type_received, cols_ref_formodel)
-            return Xtuple_train, ytrain
-
-        if task_type == "train":
-            d = data_pars[task_type]
-            Xtrain,Ytrain, Xtest,Ytest  = d["X_train"],d["Y_train"],d["X_test"],d["Y_test"]
-            #log(type(Xtrain))
-            ### dict  colgroup ---> list of df
-            #Xtuple_train = get_dataset_tuple(Xtrain, cols_type_received, cols_ref_formodel)
-            #Xtuple_test  = get_dataset_tuple(Xtest, cols_type_received, cols_ref_formodel)
-
-            return Xtrain,Ytrain, Xtest,Ytest
-
-
-    elif data_type == "file":
-        raise Exception(f' {data_type} data_type Not implemented ')
-
-    raise Exception(f' Requires  Xtrain", "Xtest", "ytrain", "ytest" ')
 
 
 
 ########################################################################################################################
 ########################################################################################################################
-def test_dataset_petfinder(nrows=1000):
-    # Dense features
-    colnum = ['PhotoAmt', 'Fee','Age' ]
-
-    # Sparse features
-    colcat = ['Type', 'Color1', 'Color2', 'Gender', 'MaturitySize','FurLength', 'Vaccinated', 'Sterilized',
-              'Health', 'Breed1' ]
-
-    colembed = ['Breed1']
-    # Target column
-    coly        = "y"
-
-    dataset_url = 'http://storage.googleapis.com/download.tensorflow.org/data/petfinder-mini.zip'
-    csv_file    = 'datasets/petfinder-mini/petfinder-mini.csv'
-    tf.keras.utils.get_file('petfinder_mini.zip', dataset_url,extract=True, cache_dir='.')
-
-    print('Data Frame Loaded')
-    df      = pd.read_csv(csv_file)
-    df      = df.iloc[:nrows, :]
-    df['y'] = np.where(df['AdoptionSpeed']==4, 0, 1)
-    df      = df.drop(columns=['AdoptionSpeed', 'Description'])
-    
-    print(df.dtypes)
-    return df, colnum, colcat, coly, colembed
-
-
-def test(config=''):
+def test(config='',     n_sample = 100):
     """ ACTUAL DICT
     """
     global model, session
-    df, colnum, colcat, coly, colembed = test_dataset_petfinder()
+    from adatasets import test_dataset_classification_petfinder
+    df, d = test_dataset_classification_petfinder(nrows=100) ;     print(d)
+    colnum, colcat, coly, colembed = d['colnum'], d['colcat'], d['coly'], d['colembed']
 
-    ##########################################################################
-    #### Matching Big dict  ##################################################
+
+    #### Big dict  ##########################################################
     cols_input_type_1 = []
-    n_sample = 100
-    def post_process_fun(y):
-        return int(y)
-
-    def pre_process_fun(y):
-        return int(y)
+    def post_process_fun(y): return int(y)
+    def pre_process_fun(y):  return int(y)
 
     m = {
     'model_pars': {
@@ -509,36 +548,36 @@ def test(config=''):
 
             ],
             }
-        },
+    },
 
     'compute_pars': { 'metric_list': ['accuracy_score','average_precision_score'],
                       'compute_pars': { 'epochs' : 1}
-                    },
+    },
 
     'data_pars': { 'n_sample' : n_sample,
-
         'data_pars' :{
         },
 
-        'download_pars' : None,
+        'download_pars'   : None,
         'cols_input_type' : cols_input_type_1,
-        ### family of columns for MODEL  #########################################################
+        ### family of columns for MODEL  ##################
          'cols_model_group': [ 'colnum_bin',   'colcat_bin', ]
 
-        ####### ACTUAL data pipeline #############################################################
-        ,'train':   {} #{'X_train': train_df,'Y_train':train_label, 'X_test':  val_df,'Y_test':val_label }
-        ,'val':     {}  #{  'X':  val_df ,'Y':val_label }
-        ,'predict': {}
-
-
-        ### Filter data rows   ##################################################################
+        ### Filter data rows   ###########################
         ,'filter_pars': { 'ymax' : 2 ,'ymin' : -1 },
 
         ### Added continuous & sparse features groups ###
         'cols_model_type2': {
             'colcontinuous':   colnum ,
             'colsparse' :     colcat,
-        },
+        }
+
+
+        ####### ACTUAL data Values #############################################################
+        ,'train':   {}  #{'X_train': train_df,'Y_train':train_label, 'X_test':  val_df,'Y_test':val_label }
+        ,'val':     {}  #{  'X':  val_df ,'Y':val_label }
+        ,'predict': {}
+
         }
     }
 
@@ -546,7 +585,7 @@ def test(config=''):
     log("##### Sparse Tests  ############################################### ")
     prepare = tf_FeatureColumns()
     model_type = 'sparse'
-    train_df, test_df, val_df = prepare.data_to_tensorflow(df, model=model_type, target='y', 
+    train_df, test_df, val_df = prepare.data_to_tensorflow_split(df, model=model_type, target='y',
                                 colcat=colcat, colnum=colnum)
 
     ### Unique values
@@ -564,10 +603,39 @@ def test(config=''):
         'colcat_unique' : colcat_unique,
         'colcat'        : colcat,
         'colnum'        : colnum,
-        'colembed_dict' : colembed_dict
+        'colembed_dict' : colembed_dict,
+        'coly' : coly
     }
-
     test_helper( m['model_pars'], m['data_pars'], m['compute_pars'])
+
+
+    log("##### Sparse Tests 2 ############################################### ")
+    path  = "ztmp/parquets/"
+    path2 = "ztmp/parquets/f01.parquet"
+    os.makedirs(path, exist_ok=True)
+    df.to_parquet( path + "/f01.parquet")
+    colcat_unique = {  col: list(df[col].unique())  for col in colcat }
+    colembed_dict = {col: 2 + int(np.log(df[col].nunique()))  for col in colembed }
+
+    ##### Dict update
+    m['model_pars']['model_pars'] = { 'loss' : 'binary_crossentropy','optimizer':'adam',
+                                      'metric': ['accuracy'],'hidden_units': '64,32,16'}
+
+    m['data_pars']['train']     = {'X_train':  path2,
+                                   'X_test':   path2}
+    m['data_pars']['predict']   = {'X':        path2 }
+
+    m['data_pars']['data_pars'] = {
+        'colcat'        : colcat,
+        'colnum'        : colnum,
+        'coly'          : coly,
+        'colcat_unique' : colcat_unique,
+        'colembed_dict' : colembed_dict,
+    }
+    test_helper( m['model_pars'], m['data_pars'], m['compute_pars'])
+
+
+
 
 
     """
@@ -592,10 +660,14 @@ def test(config=''):
     """
 
 
+
 def test2(config=''):
     """
     """
-    df, colnum, colcat, coly, colembed = test_dataset_petfinder()
+    from adatasets import test_dataset_classification_petfinder
+    df, d = test_dataset_classification_petfinder(nrows=100) ;     print(d)
+    colnum, colcat, coly, colembed = d['colnum'], d['colcat'], d['coly'], d['colembed']
+
 
     #### For pipeline data feed ###############################################################################
     prepare = tf_FeatureColumns()
@@ -634,8 +706,8 @@ def test2(config=''):
 
                 ##### Data Feed  #################################
                 'train': train_df,
-                'test': test_df,
-                'val': val_df }
+                'test':  test_df,
+                'val':   val_df }
 
     compute_pars = {'epochs':2, 'verbose': 1,'path_checkpoint': 'checkpoint/model.pth','probability':True}
 
@@ -688,22 +760,52 @@ if __name__ == '__main__':
 
 
 
-####################################################################################################################
-####################################################################################################################
-def WideDeep_dense(model_pars2):
+"""
+def test_dataset_petfinder(nrows=1000):
+    # Dense features
+    colnum = ['PhotoAmt', 'Fee','Age' ]
+
+    # Sparse features
+    colcat = ['Type', 'Color1', 'Color2', 'Gender', 'MaturitySize','FurLength', 'Vaccinated', 'Sterilized',
+              'Health', 'Breed1' ]
+
+    colembed = ['Breed1']
+    # Target column
+    coly        = "y"
+
+    dataset_url = 'http://storage.googleapis.com/download.tensorflow.org/data/petfinder-mini.zip'
+    csv_file    = 'datasets/petfinder-mini/petfinder-mini.csv'
+    tf.keras.utils.get_file('petfinder_mini.zip', dataset_url,extract=True, cache_dir='.')
+
+    print('Data Frame Loaded')
+    df      = pd.read_csv(csv_file)
+    df      = df.iloc[:nrows, :]
+    df['y'] = np.where(df['AdoptionSpeed']==4, 0, 1)
+    df      = df.drop(columns=['AdoptionSpeed', 'Description'])
+    
+    print(df.dtypes)
+    return df, colnum, colcat, coly, colembed
+"""
+
+
+
+
+
+
+def zz_WideDeep_dense(model_pars2):
         #n_wide_cross, n_wide, n_deep, n_feat=8, m_EMBEDDING=10, loss='mse', metric ='mean_squared_error'):
         """
            Dense Model of DeepWide
-        :param n_wide_cross: 
-        :param n_wide: 
-        :param n_deep: 
-        :param n_feat: 
-        :param m_EMBEDDING: 
-        :param loss: 
-        :param metric: 
-        :return: 
+        :param n_wide_cross:
+        :param n_wide:
+        :param n_deep:
+        :param n_feat:
+        :param m_EMBEDDING:
+        :param loss:
+        :param metric:
+        :return:
         """
-    
+
         m = model_pars2
         n_wide_cross = m.get('n_wide_cross', 2)
         n_wide = m.get('n_wide', 2)
@@ -751,11 +853,115 @@ def WideDeep_dense(model_pars2):
 
 
 
+def zz_get_dataset(data_pars=None, task_type="train", **kw):
+    """
+       Coupling  Columns from DataLoading  --->  Columns Input for Model
+
+
+    """
+    # log(data_pars)
+    data_type           = data_pars.get('type', 'ram')
+    colmodel_reference  = THISMODEL_COLGROUPS
+    pars = copy.deepcopy(data_pars)
+
+    if data_type == "ram":
+        # cols_ref_formodel = ['cols_cross_input', 'cols_deep_input', 'cols_deep_input' ]
+        ### dict  colgroup ---> list of colname,             ### dict  colgroup ---> list of df
+        ### Split into Sparse, Continuous
+        coldataloader_received     = data_pars.get('cols_model_type2', {} )
+
+        if task_type == "predict":
+            d            = data_pars[task_type]
+            Xtrain       = d["X"]
+            Xtuple_train = get_dataset_split_for_model_pandastuple(Xtrain, coldataloader_received, colmodel_reference)
+            return Xtuple_train
+
+        if task_type == "eval":
+            d               = data_pars[task_type]
+            Xtrain, ytrain  = d["X"], d["y"]
+            Xtuple_train    = get_dataset_split_for_model_pandastuple(Xtrain, coldataloader_received, colmodel_reference)
+            return Xtuple_train, ytrain
+
+        if task_type == "train":
+            d                           = data_pars[task_type]
+            Xtrain,Ytrain, Xtest,Ytest  = d["X_train"],d["Y_train"],d["X_test"],d["Y_test"]
+            Xtuple_train = get_dataset_split_for_model_pandastuple(Xtrain, coldataloader_received, colmodel_reference)
+            Xtuple_test  = get_dataset_split_for_model_pandastuple(Xtest,  coldataloader_received, colmodel_reference)
+            log3(type(Xtrain))
+
+            return Xtuple_train,Ytrain, Xtuple_test,Ytest
+            #return Xtrain,Ytrain, Xtest,Ytest
+
+
+    if data_type == "tfsparse":
+        ### Split into Sparse, Continuous TF Dataset
+        coldataloader_received     = data_pars.get('cols_model_type2', {} )
+
+        if task_type == "predict":
+            d            = data_pars[task_type]
+            Xtrain       = d["X"]
+            Xtuple_train = get_dataset_split_for_model_tfsparse(Xtrain, pars)
+            return Xtuple_train
+
+        if task_type == "eval":
+            d               = data_pars[task_type]
+            Xtrain, ytrain  = d["X"], d["y"]
+            Xtuple_train    = get_dataset_split_for_model_tfsparse(Xtrain, pars)
+            return Xtuple_train, ytrain
+
+        if task_type == "train":
+            d                           = data_pars[task_type]
+            Xtrain,Ytrain, Xtest,Ytest  = d["X_train"],d["Y_train"],d["X_test"],d["Y_test"]
+            Xtuple_train = get_dataset_split_for_model_tfsparse(Xtrain, pars)
+            Xtuple_test  = get_dataset_split_for_model_tfsparse(Xtest, pars)
+            return Xtuple_train,Ytrain, Xtuple_test,Ytest
+
+
+
+    if data_type == "petastorm":
+        # cols_ref_formodel = ['cols_cross_input', 'cols_deep_input', 'cols_deep_input' ]
+        ### dict  colgroup ---> list of colname
+        ### Split into Sparse, Continuous
+        coldataloader_received     = data_pars.get('cols_model_type2', {} )
+
+        if task_type == "predict":
+            d            = data_pars[task_type]
+            Xtrain       = d["X"]
+            Xtuple_train = get_dataset_split_for_model_petastorm(Xtrain, pars)
+            return Xtuple_train
+
+        if task_type == "eval":
+            d               = data_pars[task_type]
+            Xtrain, ytrain  = d["X"], d["y"]
+            Xtuple_train    = get_dataset_split_for_model_petastorm(Xtrain, pars)
+            return Xtuple_train, ytrain
+
+        if task_type == "train":
+            d                           = data_pars[task_type]
+            Xtrain,Ytrain, Xtest,Ytest  = d["X_train"],d["Y_train"],d["X_test"],d["Y_test"]
+            Xtuple_train = get_dataset_split_for_model_petastorm(Xtrain, pars)
+            Xtuple_test  = get_dataset_split_for_model_petastorm(Xtest,  pars)
+            #log(type(Xtrain))
+            ### dict  colgroup ---> list of df
+            return Xtuple_train,Ytrain, Xtuple_test,Ytest
+            #return Xtrain,Ytrain, Xtest,Ytest
+
+    elif data_type == "file":
+        raise Exception(f' {data_type} data_type Not implemented ')
+
+    raise Exception(f' Requires  Xtrain", "Xtest", "ytrain", "ytest" ')
 
 
 
 
-def input_template_feed_keras_model(Xtrain, cols_type_received, cols_ref, **kw):
+
+####################################################################################################################
+####################################################################################################################
+
+
+
+
+def zz_input_template_feed_keras_model(Xtrain, cols_type_received, cols_ref, **kw):
     """
        Create sparse data struccture in KERAS  To plug with MODEL:
        No data, just virtual data
@@ -822,13 +1028,13 @@ def input_template_feed_keras_model(Xtrain, cols_type_received, cols_ref, **kw):
 ####################################################################################################################
 ####################################################################################################################
 
-def get_dataset2(data_pars=None, task_type="train", **kw):
+def zz_get_dataset2(data_pars=None, task_type="train", **kw):
     """
       return tuple of Tensoflow
     """
     # log(data_pars)
     data_type = data_pars.get('type', 'ram')
-    cols_ref  = cols_ref_formodel
+    cols_ref  = THISMODEL_COLGROUPS
 
     if data_type == "ram":
         # cols_ref_formodel = ['cols_cross_input', 'cols_deep_input', 'cols_deep_input' ]
@@ -902,7 +1108,7 @@ def ModelCustom2():
 
 
 
-def get_dataset_tuple_keras(pattern, batch_size, mode=tf.estimator.ModeKeys.TRAIN, truncate=None):
+def zz_get_dataset_tuple_keras(pattern, batch_size, mode=tf.estimator.ModeKeys.TRAIN, truncate=None):
     """  ACTUAL Data reading :
            Dataframe ---> TF Dataset  --> feed Keras model
 
@@ -955,7 +1161,7 @@ def get_dataset_tuple_keras(pattern, batch_size, mode=tf.estimator.ModeKeys.TRAI
         dataset = dataset.take(truncate)
     return dataset
 
-def Modelsparse2():
+def zz_Modelsparse2():
     """
     https://github.com/GoogleCloudPlatform/data-science-on-gcp/blob/master/09_cloudml/flights_model_tf2.ipynb
 

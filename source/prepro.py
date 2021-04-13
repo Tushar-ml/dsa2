@@ -198,27 +198,38 @@ def pd_coly(df: pd.DataFrame, col: list=None, pars: dict=None):
 
 
 def pd_colnum_normalize(df: pd.DataFrame, col: list=None, pars: dict=None):
-    log("### colnum normalize  ###############################################################")
-    from util_feature import pd_colnum_normalize
+    """ Float num INTO [0,1]
+      'quantile_cutoff', 'quantile_cutoff_2', 'minmax'      
+      'name': 'fillna', 'na_val' : 0.0 
+
+    """
+    prefix ='colnum_norm'   ### == cols_out
+    df     = df[col]
+    log2("### colnum normalize  #############################################################")
+    from util_feature import pd_colnum_normalize as pd_normalize_fun
     colnum = col
+    if pars is None :
+       pars = { 'pipe_list': [  {'name': 'quantile_cutoff'},   #  
+                                {'name': 'fillna', 'na_val' : 0.0 },  
+                             ]}
+    if  'path_pipeline' in pars :   #### Load existing column list
+         pars  = load( pars['path_pipeline']  +f'/{prefix}_pars.pkl')
 
-    pars = { 'pipe_list': [ {'name': 'fillna', 'naval' : 0.0 }, {'name': 'minmax'} ]}
-    dfnum_norm, colnum_norm = pd_colnum_normalize(df, colname=colnum,  pars=pars, suffix = "_norm",
-                                                  return_val="dataframe,param")
-    log2(colnum_norm)
+    dfnum_norm, colnum_norm = pd_normalize_fun(df, colname=colnum,  pars=pars, suffix = "_norm",
+                                               return_val="dataframe,param")
+    log3('dfnum_norm',    dfnum_norm.head(4), colnum_norm)
+    log3('dfnum_norn NA', dfnum_norm.isna().sum() )
+    colnew = colnum_norm
 
-    # update: save col and colnum_norm in dictionary 
-    col_pars = {}
+    log3("##### Export ######################################################################") 
+    if 'path_features_store' in pars and 'path_pipeline_export' in pars:
+        save_features(dfnum_norm, prefix, pars['path_features_store'])
+        save(pars,   pars['path_pipeline_export']  + f"/{prefix}_pars.pkl" )
+
+    col_pars = {'prefix' : prefix, 'path': pars.get('path_pipeline_export', pars.get('path_pipeline', None)) }
     col_pars['cols_new'] = {
-     'colnum'     :  col ,    # list
-     'colnum_norm' :  colnum_norm       # list
+      prefix :  colnew  ### list
     }
-    if pars.get('path_features_store', None) is not None:
-        path_features_store = pars['path_features_store']
-        save_features(dfnum_norm, 'dfnum_norm', path_features_store)
-
-    # old: return dfnum_norm, colnum_norm
-    # update: return dfnum_norm, col_pars ==> return col_pars as dictionary for the next step in run_preprocess/preprocess
     return dfnum_norm, col_pars
 
 

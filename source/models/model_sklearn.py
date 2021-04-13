@@ -225,7 +225,81 @@ def preprocess(prepro_pars):
 
 
 ####################################################################################################
-############ Do not change #########################################################################
+THISMODEL_COLGROUPS = []
+def get_dataset_split_for_model_pandastuple(Xtrain, ytrain=None, data_pars=None, ):
+    """  Split data for moel input/
+    Xtrain  ---> Split INTO  tuple of data  Xtuple= (df1, df2, df3) to fit model input.
+
+    :param Xtrain:
+    :param coldataloader_received:
+    :param colmodel_ref:
+    :return:
+    """
+    from utilmy import pd_read_file
+    coldataloader_received,  = data_pars.get('cols_model_type2', {})
+    colmodel_ref             = THISMODEL_COLGROUPS
+
+    ### Into RAM
+    if isinstance(Xtrain, str) : Xtrain = pd_read_file(Xtrain, verbose=False)
+    if isinstance(ytrain, str) : ytrain = pd_read_file(ytrain, verbose=False)
+
+
+    if len(colmodel_ref) <= 1 :   ## No split
+        return Xtrain
+
+    ### Split the pandas columns into different pieces  ######################
+    Xtuple_train = []
+    for cols_groupname in colmodel_ref :
+        assert cols_groupname in coldataloader_received, "Error missing colgroup in  data_pars[cols_model_type] "
+        cols_name_list = coldataloader_received[cols_groupname]
+        Xtuple_train.append( Xtrain[cols_name_list] )
+
+    return Xtuple_train, ytrain
+
+
+def get_dataset_split_for_model(d, data_pars):
+     if 'Xtrain' in d and 'ytrain' in d and 'Xtest' in d  and 'ytest' in d:
+         Xtrain, ytrain = get_dataset_split_for_model_pandastuple(d['Xtrain'], d['ytrain'],  data_pars)
+         Xtest, ytest   = get_dataset_split_for_model_pandastuple(d['Xtest'], d['ytest'],    data_pars)
+         return Xtrain, ytrain, Xtest, ytest
+
+     if 'X' in d and 'y' in d :
+         Xtrain, ytrain = get_dataset_split_for_model_pandastuple(d['X'], d['y'],  data_pars)
+         return Xtrain, ytrain
+
+     if 'X'  in d :
+         Xtrain, _ = get_dataset_split_for_model_pandastuple(d['X'], None,  data_pars)
+         return Xtrain, None
+
+
+
+def get_dataset2(data_pars=None, task_type="train", **kw):
+    """
+      "ram"  :
+      "file" :
+    """
+    # log(data_pars)
+    data_type = data_pars.get('type', 'ram')
+
+    if task_type == "predict":
+        d = data_pars[task_type]
+        data_pars[task_type] = None    ### Save memory
+        d = get_dataset_split_for_model(d, data_pars )
+        return d["X"]
+
+    if task_type == "eval":
+        d = data_pars[task_type]
+        data_pars[task_type] = None
+        d = get_dataset_split_for_model(d, data_pars )
+        return d["X"], d["y"]
+
+    if task_type == "train":
+        d = data_pars[task_type]
+        data_pars[task_type] = None
+        d = get_dataset_split_for_model(d, data_pars )
+        return d["Xtrain"], d["ytrain"], d["Xtest"], d["ytest"]
+
+
 def get_dataset(data_pars=None, task_type="train", **kw):
     """
       "ram"  : 
@@ -234,8 +308,6 @@ def get_dataset(data_pars=None, task_type="train", **kw):
     # log(data_pars)
     data_type  = data_pars.get('type', 'ram')
     cols_type  = data_pars.get('cols_model_type2', {})   #### Split input by Sparse, Continous
-    cols_model = data_pars['cols_model']
-    coly       = data_pars['coly']
 
     log3("Cols Type:", cols_type)
 
@@ -256,6 +328,10 @@ def get_dataset(data_pars=None, task_type="train", **kw):
         raise Exception(f' {data_type} data_type Not implemented ')
 
     raise Exception(f' Requires  Xtrain", "Xtest", "ytrain", "ytest" ')
+
+
+
+
 
 
 def get_params_sklearn(deep=False):

@@ -47,7 +47,7 @@ def reset():
     model, session = None, None
 
 
-########Custom Model ################################################################################
+######## Custom Model ################################################################################
 sys.path.append( os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/")
 ### import util_feature
 
@@ -80,9 +80,17 @@ from imblearn.under_sampling import NearMiss
 # CONSTANTS
 SDV_MODELS      = ['TVAE', 'CTGAN', 'PAR'] # The Synthetic Data Vault Models
 IMBLEARN_MODELS = ['SMOTE', 'SMOTEENN', 'SMOTETomek', 'NearMiss']
+MODEL_LIST      = {'TVAE'           : TVAE, 
+                    'CTGAN'         : CTGAN, 
+                    'PAR'           : PAR, 
+                    'SMOTE'         : SMOTE, 
+                    'SMOTEENN'      : SMOTEENN, 
+                    'SMOTETomek'    : SMOTETomek, 
+                    'NearMiss'      : NearMiss
+                    }
 
 
-####################################################################################################
+############### Model #########################################################################
 class Model(object):
     def __init__(self, model_pars=None, data_pars=None, compute_pars=None):
         self.model_pars, self.compute_pars, self.data_pars = model_pars, compute_pars, data_pars
@@ -90,7 +98,10 @@ class Model(object):
         if model_pars is None:
             self.model = None
         else:
-            model_class = globals()[model_pars['model_class']]
+            try:
+                model_class = MODEL_LIST[model_pars['model_class']]
+            except Exception as e:
+                raise KeyError("Please add model_class to MODEL_LIST")
             self.model  = model_class(**model_pars['model_pars'])
             log2(model_class, self.model)
 
@@ -117,7 +128,6 @@ def eval(data_pars=None, compute_pars=None, out_pars=None, **kw):
     global model, session
     from sdv.evaluation import evaluate
 
-    data_pars['train'] = True
     Xval, yval         = get_dataset(data_pars, task_type="eval")
 
     if model.model_pars['model_class'] in IMBLEARN_MODELS:
@@ -151,63 +161,6 @@ def transform(Xpred=None, data_pars={}, compute_pars={}, out_pars={}, **kw):
     name = model.model_pars['model_class']
 
     #######
-    if Xpred is None:
-        if name in IMBLEARN_MODELS:
-            Xpred_tuple, y = get_dataset(data_pars, task_type="eval")
-
-        else:
-            Xpred_tuple = get_dataset(data_pars, task_type="predict")
-
-    else :
-        cols_type         = data_pars['cols_model_type2']
-        cols_ref_formodel = cols_type  ### Always match with feeded cols_type
-        split             = kw.get("split", False)
-
-        if name in IMBLEARN_MODELS:
-            if isinstance(Xpred, tuple) and len(Xpred) == 2:
-                x, y = Xpred
-                Xpred_tuple = get_dataset_tuple(x, cols_type, cols_ref_formodel, split)
-
-            else:
-                raise  Exception(f"IMBLEARN MODELS need to pass x, y to resample,you have to pass them as tuple => Xpred = (x, y)")
-
-        else:
-            Xpred_tuple       = get_dataset_tuple(Xpred, cols_type, cols_ref_formodel, split)
-
-    Xnew= None
-    if name in SDV_MODELS :
-       Xnew = model.model.sample(compute_pars.get('n_sample_generation', 100) )
-
-    elif name in IMBLEARN_MODELS :   ### Sampler
-       # fit_resample(x ,y ) ==> resample dataset, it returns x,y after resampling
-       # Xnew ==> tuple(x, y) after resmapling
-       Xnew = model.model.fit_resample( Xpred_tuple, y, **compute_pars.get('compute_pars', {}) )
-
-    else :
-       Xnew = model.model.transform( Xpred_tuple, **compute_pars.get('compute_pars', {}) )
-
-    log3("generated data", Xnew)
-    return Xnew
-
-
-
-
-def transform2(Xpred=None, data_pars={}, compute_pars={}, out_pars={}, **kw):
-    """ Geenrate Xtrain  ----> Xtrain_new
-    :param Xpred:
-        Xpred ==> None            if you want to get generated samples by by SDV models
-              ==> tuple of (x, y) if you want to resample dataset with IMBLEARN models
-              ==> dataframe       if you want to transorm by sklearn models like TruncatedSVD
-    :param data_pars:
-    :param compute_pars:
-    :param out_pars:
-    :param kw:
-    :return:
-    """
-    global model, session
-    name = model.model_pars['model_class']
-
-    #######
     if name in IMBLEARN_MODELS:
         if Xpred is None:
             Xpred_tuple, y = get_dataset(data_pars, task_type="eval")
@@ -221,9 +174,9 @@ def transform2(Xpred=None, data_pars={}, compute_pars={}, out_pars={}, **kw):
             else:
                 raise  Exception(f"IMBLEARN MODELS need to pass x, y to resample,you have to pass them as tuple => Xpred = (x, y)")
 
-       Xnew = model.model.fit_resample( Xpred_tuple, y, **compute_pars.get('compute_pars', {}) )
-       log3("generated data", Xnew)
-       return Xnew
+        Xnew = model.model.fit_resample( Xpred_tuple, y, **compute_pars.get('compute_pars', {}) )
+        log3("generated data", Xnew)
+        return Xnew
 
 
     if name in SDV_MODELS :
@@ -240,9 +193,17 @@ def transform2(Xpred=None, data_pars={}, compute_pars={}, out_pars={}, **kw):
 
 
     else :
+       if Xpred is None:
+            Xpred_tuple, y = get_dataset(data_pars, task_type="eval")
+       else :
+            cols_type         = data_pars['cols_model_type2']
+            cols_ref_formodel = cols_type  ### Always match with feeded cols_type
+            split             = kw.get("split", False)
+            Xpred_tuple       = get_dataset_tuple(Xpred, cols_type, cols_ref_formodel, split)
+
        Xnew = model.model.transform( Xpred_tuple, **compute_pars.get('compute_pars', {}) )
-
-
+       log3("generated data", Xnew)
+       return Xnew
 
 
 def predict(Xpred=None, data_pars={}, compute_pars={}, out_pars={}, **kw):
@@ -251,6 +212,7 @@ def predict(Xpred=None, data_pars={}, compute_pars={}, out_pars={}, **kw):
     ### No need
 
 
+#################### util #############################################################
 def save(path=None, info=None):
     global model, session
     import cloudpickle as pickle
@@ -287,7 +249,7 @@ def load_info(path=""):
     return dd
 
 
-####################################################################################################
+############# Dataset ##############################################################################
 ############ Do not change #########################################################################
 def get_dataset_tuple(Xtrain, cols_type_received, cols_ref, split=False):
     """  Split into Tuples = (df1, df2, df3) to feed model, (ie Keras)
@@ -358,7 +320,7 @@ def get_dataset(data_pars=None, task_type="train", **kw):
     raise Exception(f' Requires  Xtrain", "Xtest", "ytrain", "ytest" ')
 
 
-##################################################################################################################
+###################### test ############################################################################################
 ##################################################################################################################
 def test():
     from sklearn.datasets import make_classification
@@ -377,6 +339,7 @@ def test():
     colid  = 'colid'
     colnum = [ 'col_0', 'col_3', 'col_4', 'coly']
     colcat = [ 'col_1', 'col_7', 'col_8', 'col_9']
+
     cols_input_type_1 = {
         'colnum' : colnum,
         'colcat' : colcat
@@ -392,6 +355,7 @@ def test():
         cols_model_type2[colg] = []
         for colg_i in colist :
           cols_model_type2[colg].extend( [i for i in cols_input_type_1[colg_i] if i not in y.columns ]   )
+    
     ###############################################################################
     n_sample = 100
     data_pars = {'n_sample': n_sample,
@@ -415,84 +379,53 @@ def test():
                           'y': y_valid}
     data_pars['predict'] = {'X': X_valid}
 
-    compute_pars = { 'compute_pars' : { # 'epochs': 2,
+    compute_pars = { 'compute_pars' : { 
                    } }
 
     #####################################################################
-    # log("test 1")
-    # model_pars = {'model_class': 'TruncatedSVD',
-    #               'model_pars': {
-    #                   "n_components": 3,
-    #                   'n_iter': 2,
-    #                  # 'ratio' :'auto',
-    #             },
-    #             }
-    # test_helper(model_pars, data_pars, compute_pars)
-    log("test 5")
-
-    #####################################################################
-    # log("test 2 --> CTGAN")
-    # model_pars = {'model_class': 'CTGAN',
-    #               'model_pars': {
-    #                  ## CTGAN
-    #                  'primary_key': colid,
-    #                  'epochs': 1,
-    #                  'batch_size' :100,
-    #                  'generator_dim' : (256, 256, 256),
-    #                  'discriminator_dim' : (256, 256, 256)
-    #             },
-    #             }
-    # compute_pars = { 
-    #     'compute_pars' : {}
-    #     }
-    # test_helper(model_pars, data_pars, compute_pars)
-
-
-    # log("test 3 --> TVAE")
-    # model_pars = {'model_class': 'TVAE',
-    #               'model_pars': { 
-    #                   ## TVAE
-    #                  'primary_key': colid,
-    #                  'epochs': 1,
-    #                  'batch_size' :100,
-    #             },
-    #             }
-    # compute_pars = { 
-    #     'compute_pars' : {}
-    #     }
-    # test_helper(model_pars, data_pars, compute_pars)
-
-    # log("test 4 --> PAR")
-    # entity_columns = [colid]
-    # context_columns = None
-    # sequence_index = None
-    # model_pars = {'model_class': 'PAR',
-    #               'model_pars': {
-    #                  ## PAR
-    #                  'epochs': 1,
-    #                  'entity_columns': entity_columns,
-    #                  'context_columns': context_columns,
-    #                  'sequence_index': sequence_index
-    #             },
-    #             }
-    # compute_pars = { 
-    #     'compute_pars' : {}
-    #     }
-    # test_helper(model_pars, data_pars, compute_pars)
-
-    log("test 6 --> SMOTE")
-    model_pars = {'model_class': 'SMOTE',
+    models = {
+        'CTGAN': {'model_class': 'CTGAN',
+                  'model_pars': {
+                      ## CTGAN
+                     'primary_key': colid,
+                     'epochs': 1,
+                     'batch_size' :100,
+                     'generator_dim' : (256, 256, 256),
+                     'discriminator_dim' : (256, 256, 256)
+                },
+                },
+        'TVAE': {'model_class': 'TVAE',
+                  'model_pars': { 
+                      ## TVAE
+                     'primary_key': colid,
+                     'epochs': 1,
+                     'batch_size' :100,
+                },
+                },
+        'PAR': {'model_class': 'PAR',
+                  'model_pars': {
+                     ## PAR
+                     'epochs': 1,
+                     'entity_columns': [colid],
+                     'context_columns': None,
+                     'sequence_index': None
+                },
+                },
+        'SMOTE': {'model_class': 'SMOTE',
                   'model_pars': {
                      ## SMOTE
                 },
                 }
-    compute_pars = { 
-        'compute_pars' : {}
-        }
-    test_helper(model_pars, data_pars, compute_pars)
 
+    }
+    
+    log("######## running Models test ##################")
 
-
+    counter = 1
+    for model_name, model_pars in models.items():
+        log(f"test {counter} --> {model_name}")
+        test_helper(model_pars, data_pars, compute_pars)
+        counter += 1
 
 
 def test_dataset_classi_fake(nrows=500):
@@ -528,8 +461,7 @@ def train_test_split2(df, coly):
     return X,y, X_train, X_valid, y_train, y_valid, X_test,  y_test, num_classes
 
 
-
-def test2(n_sample          = 1000):
+def test2(n_sample = 1000):
     df, colnum, colcat, coly = test_dataset_classi_fake(nrows= n_sample)
     X,y, X_train, X_valid, y_train, y_valid, X_test,  y_test, num_classes  = train_test_split2(df, coly)
 
@@ -613,7 +545,6 @@ def test_helper(model_pars, data_pars, compute_pars):
     log(model)
 
 
-
 if __name__ == "__main__":
     import fire
     fire.Fire()
@@ -630,9 +561,8 @@ if __name__ == "__main__":
 
 
 
-
-
-
+#########################  Second Part ###############################
+######################### Useful Funciton ###############################
 def pd_sample_imblearn(df=None, col=None, pars=None):
     """
         Over-sample
@@ -678,11 +608,6 @@ def pd_sample_imblearn(df=None, col=None, pars=None):
        prefix :  col_new  ###  for training input data
     }
     return df2, col_pars
-
-
-
-
-
 
 
 def pd_augmentation_sdv(df, col=None, pars={})  :
@@ -752,10 +677,6 @@ def pd_augmentation_sdv(df, col=None, pars={})  :
 
     log('###### augmentation complete ######')
     return df_new, col
-
-
-
-
 
     
 
@@ -847,8 +768,6 @@ def pd_filter_rows(df, col, pars):
     return df, col
 
 
-
-
 def pd_autoencoder(df, col, pars):
     """"
     (4) Autoencoder
@@ -914,8 +833,6 @@ def pd_autoencoder(df, col, pars):
     # df_out = mapper.encoder_dataset(df.copy(), ["Close_1"], 15); df_out.head()
 
 
-
-
 #####################################################################################
 #####################################################################################
 def test_pd_augmentation_sdv():
@@ -963,7 +880,6 @@ def test_pd_augmentation_sdv():
     log('####### Reload')
     df_new, _ = pd_augmentation_sdv(df, pars={'path_model_load': path,  'n_samples' : 5 })
     log_pd(df_new)
-
 
 
 def pd_covariate_shift_adjustment():
@@ -1023,8 +939,6 @@ def pd_covariate_shift_adjustment():
     print('Sparsity of solution: %s%%' % (sparsity * 100))
 
 
-
-
 ########################################################################################
 ########################################################################################
 def test():
@@ -1039,10 +953,6 @@ def test():
     for fname, pars in ll :
         myfun = globals()[fname]
         res   = myfun(dfX, cols, pars)
-
-
-
-
     
     
 """

@@ -82,13 +82,18 @@ jobs:
       run:  |
         ls .
         #pip install -r install/requirements_fake.txt
-
+        
+    - name: Install rectorch from dev branch
+      run: |
+        git clone -b dev https://github.com/makgyver/rectorch.git
+        cd rectorch
+        pip3 install -r requirements.txt
+        python setup.py install
     #- name: Install repo
     #  run: pip install -e . -r install/py36.txt  --no-deps
 
     # - name: log_start
     #  run: ml_test --do log_remote_start
-
 
     - name: test_import
       run: |
@@ -103,12 +108,14 @@ jobs:
     #  run: chmod -R 777 . && ztest/run_models.sh   # 2>&1 | tee   /home/runner/work/mlmodels/mlmodels_store/log_import/log_optim.py
 
 
+    ########### Keras TF #############################################################################
     - name: python keras_widedeep.py  test
       continue-on-error: true
       run:  |
             cd source/models && ipython keras_widedeep.py  test
             echo "keras_widedeep.py" >> file_check.txt
       ## ipython keras_widedeep.py  test2
+
 
     - name: python keras_widedeep_dense.py  test
       # continue-on-error: true
@@ -117,16 +124,18 @@ jobs:
             echo "keras_widedeep_dense.py" >> file_check.txt
 
 
-    - name: python model_bayesian_numpyro.py test
+    - name: python model_vaem.py test
       continue-on-error: true
-      run:  cd source/models && ipython model_bayesian_pyro.py test  && echo "model_bayesian_pyro.py" >> file_check.txt
+      run:  cd source/models && ipython model_vaem.py test
 
 
-    - name: python model_bayesian_pyro.py test
+    - name: python model_vaemdn.py test
       # continue-on-error: true
-      run:  cd source/models && ipython model_bayesian_pyro.py test && echo "model_bayesian_pyro.py" >> file_check.txt
+      run:  cd source/models && ipython model_vaemdn.py test2
 
 
+
+    ########### SKlearn type #########################################################################
     - name: python model_gefs.py test
       # continue-on-error: true
       run:  cd source/models && ipython model_gefs.py test   && echo "model_gefs.py" >> file_check.txt
@@ -142,14 +151,16 @@ jobs:
       run:  cd source/models && ipython model_tseries.py test
 
 
-    - name: python model_vaem.py test
+
+    ########### Pytorch #############################################################################
+    - name: python model_bayesian_numpyro.py test
       continue-on-error: true
-      run:  cd source/models && ipython model_vaem.py test
+      run:  cd source/models && ipython model_bayesian_pyro.py test  && echo "model_bayesian_pyro.py" >> file_check.txt
 
 
-    - name: python model_vaemdn.py test
+    - name: python model_bayesian_pyro.py test
       # continue-on-error: true
-      run:  cd source/models && ipython model_vaemdn.py test2
+      run:  cd source/models && ipython model_bayesian_pyro.py test && echo "model_bayesian_pyro.py" >> file_check.txt
 
 
     - name: python torch_rvae.py test 
@@ -176,6 +187,25 @@ jobs:
     - name: python model_encoder.py test
       continue-on-error: true
       run:  cd source/models && ipython model_encoder.py.py test
+
+
+
+    #################################################################################################
+    - name: Install rectorch from dev branch
+      run: |
+        cd source/models/repo && git clone -b dev https://github.com/makgyver/rectorch.git
+        cd rectorch
+        pip3 install -r requirements.txt
+        python setup.py install
+
+    - name: python torch_ease.py test_sparse
+      # continue-on-error: true
+      run: cd source/models && ipython torch_ease.py test_sparse
+
+
+    - name: python torch_rectorch.py test
+      # continue-on-error: true
+      run: cd source/models && ipython torch_rectorch.py test
 
 
 

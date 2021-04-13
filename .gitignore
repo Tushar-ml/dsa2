@@ -219,3 +219,4 @@ mlflow_local.db
 /source/models/repo/RVAE_MixedTypes/data_simple/Adult/gaussian_m0s5_categorical_alpha0.0
 /source/models/ztmp2/model_functions_3.py
 /source/models/ztmp_checkpoint
+/source/models/data/input/ztest/fake

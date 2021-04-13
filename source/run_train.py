@@ -76,10 +76,11 @@ def map_model(model_name):
     """
     ##### Custom folder
     if ".py" in model_name :
+       model_file = model_name.split(":")[0]    
        ### Asbolute path of the file
-       path = os.path.dirname(os.path.abspath(model_name))
+       path = os.path.dirname(os.path.abspath(model_file))
        sys.path.append(path)
-       mod    = os.path.basename(model_name).replace(".py", "")
+       mod    = os.path.basename(model_file).replace(".py", "")
        modelx = importlib.import_module(mod)
        return modelx
 
@@ -142,9 +143,36 @@ def train(model_dict, dfX, cols_family, post_process_fun):
                           'yval'   : dfX[coly].iloc[ival:],
                           }
 
+    """
+    ##### Lazy Dict mechanism
+    m = {'Xtrain'  : model_path + "/Xtrain/" ,
+          'ytrain' : model_path + "/ytrain/",
+          'Xtest'  : model_path + "/Xtest/",
+          'ytest'  : model_path + "/ytest/",
+    
+          'Xval'   : model_path + "/Xval/",
+          'yval'   : model_path + "/yval/",
+          }
+
+    dfX[colsX].iloc[:itrain, :].to_parquet(m['Xtrain']  + "/file_01.parquet" )
+    dfX[coly].iloc[:itrain].to_parquet(    m['ytrain']  + "/file_01.parquet" )
+
+    dfX[colsX].iloc[itrain:ival, :].to_parquet(m['Xval'] + "/file_01.parquet" )
+    dfX[coly].iloc[itrain:ival].to_parquet(   m['yval']  + "/file_01.parquet" )
+
+    dfX[colsX].iloc[ival:, :].to_parquet(    m['Xval'] + "/file_01.parquet" )
+    dfX[coly].iloc[ival:].to_parquet(       m['yval']  + "/file_01.parquet"  )
+    
+    
+    data_pars['data_type'] = 'pandas'  ### Tf dataset, pytorch    
+    data_pars['train'] = m
+    """
+
+
+
     log("#### Init, Train ############################################################")
     # from config_model import map_model    
-    modelx = map_model(model_name)    
+    modelx = map_model(model_name)
     log2(modelx)
     modelx.reset()
     ###  data_pars_ref has NO data.
@@ -304,17 +332,21 @@ def run_train(config_name, config_path="source/config_model.py", n_sample=5000,
         mlflow_register(dfXy, model_dict, stats, mlflow_pars)
 
 
+    log("#### Export ##################################################################")
     if return_mode == 'dict' :
         return { 'dfXy' : dfXy, 'dfXytest': dfXytest, 'stats' : stats   }
 
-    else :
-        log("#### Export ##################################################################")
+    else :        
         os.makedirs(path_check_out, exist_ok=True)
         colexport = [cols['colid'], cols['coly'], cols['coly'] + "_pred"]
-        dfXy[colexport].reset_index().to_csv(path_check_out + "/pred_check.csv")  # Only results
+        if cols['coly'] + '_proba' in  dfXy.columns :
+            colexport.append( cols['coly'] + '_proba' )
+        dfXy[colexport].to_csv(path_check_out + "/pred_check.csv", sep="\t")  # Only results
+
         dfXy.to_parquet(path_check_out + "/dfX.parquet")  # train input data generate parquet
-        #dfXy.to_csv(path_check_out + "/dfX.csv")  # train input data generate csv
         dfXytest.to_parquet(path_check_out + "/dfXtest.parquet")  # Test input data  generate parquet
+
+        #dfXy.to_csv(path_check_out + "/dfX.csv")  # train input data generate csv
         #dfXytest.to_csv(path_check_out + "/dfXtest.csv")  # Test input data  generate csv
         log("######### Finish #############################################################", )
 
