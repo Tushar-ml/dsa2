@@ -92,8 +92,11 @@ Dict can NOT contain Object ( Dict ==  JSON file)
 Dict can contain onyl string, float, .. list of string, dict of float...
 
 model_pars : {
-    'model_pars'       : Dict to pass DIRECTLY to YOUR MODEL   MY_MODEL_CLASS(**model_pars['model_pars'])
     'model_class'      : Name of your Class
+
+    'model_pars'       : Dict to pass DIRECTLY to YOUR MODEL   MY_MODEL_CLASS(**model_pars['model_pars'])
+    'model_extra'      : Dict of extra params for YOUR MODEL   , but we use if .. then .. code to map
+  
     'post_process_fun' : post_process_function to run  After prediction
     'pre_process_pars' :
          'y_norm_fun' :  pre_process_fun ### Before training 
@@ -113,6 +116,7 @@ data_pars : {
     ### Model feed 
     'cols_model_group':  List of column groups to feed the model.
     'cols_model_type2':  dict of colunm groups to feed the model  by TYPE : colmodel_sparse, colmodel_dense
+  
     "data_pars":         dict of specific data pars for the model. : tf_feature_column
 
     #### This part is GENERATED Dynamically from other data_pars   ###############################
@@ -127,7 +131,7 @@ data_pars : {
 
 compute_pars = {
     'compute_pars'  :  Dict to pass DIRECTLY to YOUR MODEL .fit( , ** compute_pars['compute_pars'])
-    'compute_extra' :  Dict used for training, But the params are NOT used directly (ie mapping code) 
+    'compute_extra' :  Dict used for training, But the params are NOT used directly (ie IF THEN ...mapping code) 
     "metrics_list"  :  list of sklearn metrics in string
 }
 

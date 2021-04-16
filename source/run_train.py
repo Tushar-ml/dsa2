@@ -1,34 +1,33 @@
 # pylint: disable=C0321,C0103,E1221,C0301,E1305,E1121,C0302,C0330
 # -*- coding: utf-8 -*-
 """
-
 python source/run_train.py  run_train --config_name elasticnet  --path_data_train data/input/train/    --path_output data/output/a01_elasticnet/
 
-activate py36 && python source/run_train.py  run_train   --n_sample 100  --config_name lightgbm  --path_model_config source/config_model.py  --path_output /data/output/a01_test/     --path_data_train /data/input/train/
+python source/run_train.py  run_train   --n_sample 100  --config_name lightgbm  --path_model_config source/config_model.py  --path_output /data/output/a01_test/     --path_data_train /data/input/train/
 
 """
 import warnings,sys, os, json, importlib, copy
 warnings.filterwarnings('ignore')
 
 ####################################################################################################
-#### Add path for python import
-sys.path.append( os.path.dirname(os.path.abspath(__file__)) + "/")
-root = os.path.abspath(os.getcwd()).replace("\\", "/") + "/"
-print(root)
-
-####################################################################################################
-try   : verbosity = int(json.load(open(os.path.dirname(os.path.abspath(__file__)) + "/../config.json", mode='r'))['verbosity'])
-except Exception as e : verbosity = 4
-#raise Exception(f"{e}")
+from utilmy import global_verbosity, os_makedirs
+verbosity = global_verbosity(__file__, "/../config.json" ,default= 5)
 
 def log(*s):
-    print(*s, flush=True)
+    if verbosity >= 1 : print(*s, flush=True)
 
 def log2(*s):
     if verbosity >= 2 : print(*s, flush=True)
 
 def log3(*s):
     if verbosity >= 3 : print(*s, flush=True)
+
+
+####################################################################################################
+#### Add path for python import
+sys.path.append( os.path.dirname(os.path.abspath(__file__)) + "/")
+root = os.path.abspath(os.getcwd()).replace("\\", "/") + "/"
+log(root)
 
 
 ####################################################################################################
@@ -49,7 +48,7 @@ def model_dict_load(model_dict, config_path, config_name, verbose=True):
     if model_dict is None :
       log("#### Model Params Dynamic loading  ###############################################")
       model_dict_fun = load_function_uri(uri_name=config_path + "::" + config_name)
-      model_dict    = model_dict_fun()   ### params 
+      model_dict     = model_dict_fun()   ### params
 
     else :
         ### Passing dict 
@@ -101,6 +100,7 @@ def map_model(model_name):
 
     return modelx
 
+
 def train(model_dict, dfX, cols_family, post_process_fun):
     """  Train the model using model_dict, save model, save prediction
     :param model_dict:  dict containing params
@@ -118,64 +118,67 @@ def train(model_dict, dfX, cols_family, post_process_fun):
     log2(data_pars['cols_model_type2'])
 
 
-    log("#### Model Input preparation ##################################################")
-    log2(dfX.shape)
-    dfX    = dfX.sample(frac=1.0)
-    itrain = int(0.6 * len(dfX))
-    ival   = int(0.8 * len(dfX))
+    log("#### Model Input : columns ##################################################")
     colsX  = data_pars['cols_model']
     coly   = data_pars['coly']
     log2('Model colsX',colsX)
     log2('Model coly', coly)
     log2('Model column type: ',data_pars['cols_model_type2'])
-
     ### Only Parameters
     data_pars_ref = copy.deepcopy(data_pars)
 
+    log("#### Model Input : Actual data split ########################################")
+    log2(dfX.shape)
+    dfX    = dfX.sample(frac=1.0)
+    itrain = int(0.6 * len(dfX))
+    ival   = int(0.8 * len(dfX))
+
+    ###### Pass full Pandas dataframe
+    #### date_type :  'ram', 'pandas', tf_data,  torch_data,
+    data_pars['data_type'] = data_pars.get('data_type', 'ram')
+    data_pars['train'] = { 'Xtrain' : dfX[colsX].iloc[:itrain, :],
+                           'ytrain' : dfX[coly].iloc[:itrain],
+                           'Xtest'  : dfX[colsX].iloc[itrain:ival, :],
+                           'ytest'  : dfX[coly].iloc[itrain:ival],
+
+                           'Xval'   : dfX[colsX].iloc[ival:, :],
+                           'yval'   : dfX[coly].iloc[ival:],
+                         }
+
+    """
     #### TODO : Lazy Dict to have large dataset
-    data_pars['data_type'] = 'ram'
-    data_pars['train'] = {'Xtrain' : dfX[colsX].iloc[:itrain, :],
-                          'ytrain' : dfX[coly].iloc[:itrain],
-                          'Xtest'  : dfX[colsX].iloc[itrain:ival, :],
-                          'ytest'  : dfX[coly].iloc[itrain:ival],
-
-                          'Xval'   : dfX[colsX].iloc[ival:, :],
-                          'yval'   : dfX[coly].iloc[ival:],
-                          }
-
-    """
-    ##### Lazy Dict mechanism
-    m = {'Xtrain'  : model_path + "/Xtrain/" ,
-          'ytrain' : model_path + "/ytrain/",
-          'Xtest'  : model_path + "/Xtest/",
-          'ytest'  : model_path + "/ytest/",
+    ##### Lazy Dict mechanism : Only path
+    m = {'Xtrain'  : model_path + "train/Xtrain/" ,
+          'ytrain' : model_path + "train/ytrain/",
+          'Xtest'  : model_path + "train/Xtest/",
+          'ytest'  : model_path + "train/ytest/",
     
-          'Xval'   : model_path + "/Xval/",
-          'yval'   : model_path + "/yval/",
+          'Xval'   : model_path + "train/Xval/",
+          'yval'   : model_path + "train/yval/",
           }
-
+    for key, path in m.items() :
+       os.makedirs(path, exist_ok =True)   
     dfX[colsX].iloc[:itrain, :].to_parquet(m['Xtrain']  + "/file_01.parquet" )
-    dfX[coly].iloc[:itrain].to_parquet(    m['ytrain']  + "/file_01.parquet" )
+    dfX[[coly]].iloc[:itrain].to_parquet(    m['ytrain']  + "/file_01.parquet" )
 
-    dfX[colsX].iloc[itrain:ival, :].to_parquet(m['Xval'] + "/file_01.parquet" )
-    dfX[coly].iloc[itrain:ival].to_parquet(   m['yval']  + "/file_01.parquet" )
+    dfX[colsX].iloc[itrain:ival, :].to_parquet(m['Xtest']  + "/file_01.parquet" )
+    dfX[[coly]].iloc[itrain:ival].to_parquet(    m['ytest']  + "/file_01.parquet" )
 
-    dfX[colsX].iloc[ival:, :].to_parquet(    m['Xval'] + "/file_01.parquet" )
-    dfX[coly].iloc[ival:].to_parquet(       m['yval']  + "/file_01.parquet"  )
+    dfX[colsX].iloc[ival:, :].to_parquet(   m['Xval']  + "/file_01.parquet" )
+    dfX[[coly]].iloc[ival:].to_parquet(     m['yval']  + "/file_01.parquet"  )
+        
     
-    
-    data_pars['data_type'] = 'pandas'  ### Tf dataset, pytorch    
-    data_pars['train'] = m
+    #### date_type :  'ram', 'pandas', tf_data,  torch_data,
+    data_pars['data_type'] = data_pars.get('data_type', 'ram')  ### Tf dataset, pytorch    
+    data_pars['train']     = m
     """
 
-
-
-    log("#### Init, Train ############################################################")
+    log("#### Init, Train #############################################################")
     # from config_model import map_model    
     modelx = map_model(model_name)
     log2(modelx)
     modelx.reset()
-    ###  data_pars_ref has NO data.
+    ###  data_pars_ref has NO data, only string params
     modelx.init(model_pars, data_pars= data_pars_ref, compute_pars=compute_pars)
 
     ### Using Actual daa in data_pars['train']
@@ -189,7 +192,8 @@ def train(model_dict, dfX, cols_family, post_process_fun):
 
     dfX[coly]            = dfX[coly].apply(lambda  x : post_process_fun(x) )
     dfX[coly + '_pred']  = dfX[coly + '_pred'].apply(lambda  x : post_process_fun(x) )
-
+    log2("Prediction    : ",  dfX[[ coly, coly + '_pred' ]] )
+    
     if ypred_proba is None :  ### No proba
         ypred_proba_val = None
 
@@ -201,12 +205,12 @@ def train(model_dict, dfX, cols_family, post_process_fun):
         from util_feature import np_conv_to_one_col
         ypred_proba_val      = ypred_proba[ival:,:]
         dfX[coly + '_proba'] = np_conv_to_one_col(ypred_proba, ";")  ### merge into string "p1,p2,p3,p4"
-        log(dfX.head(3).T)
 
-    log2("Actual    : ",  dfX[coly ])
-    log2("Prediction: ",  dfX[coly + '_pred'])
+    if coly + '_proba' in dfX.columns :
+        log2('y_proba', dfX[ coly + '_proba'  ])
 
-    log("#### Metrics ###############################################################")
+
+    log("#### Metrics ################################################################")
     from util_feature import  metrics_eval
     metrics_test = metrics_eval(metric_list,
                                 ytrue       = dfX[coly].iloc[ival:],
@@ -216,7 +220,7 @@ def train(model_dict, dfX, cols_family, post_process_fun):
     log(stats)
 
 
-    log("### Saving model, dfX, columns #############################################")
+    log("### Saving model, dfX, columns ##############################################")
     log2(model_path + "/model.pkl")
     os.makedirs(model_path, exist_ok=True)
     save(colsX, model_path + "/colsX.pkl")
@@ -262,8 +266,7 @@ def cols_validate(model_dict):
 
 def run_train(config_name, config_path="source/config_model.py", n_sample=5000,
               mode="run_preprocess", model_dict=None, return_mode='file', **kw):
-    """
-      Configuration of the model is in config_model.py file
+    """ Configuration of the model is
     :param config_name:
     :param config_path:
     :param n_sample:
@@ -341,13 +344,12 @@ def run_train(config_name, config_path="source/config_model.py", n_sample=5000,
         colexport = [cols['colid'], cols['coly'], cols['coly'] + "_pred"]
         if cols['coly'] + '_proba' in  dfXy.columns :
             colexport.append( cols['coly'] + '_proba' )
-        dfXy[colexport].to_csv(path_check_out + "/pred_check.csv", sep="\t")  # Only results
+        dfXy[colexport].sample(n=100).to_csv(path_check_out + "/pred_check_sample.csv", sep="\t")  # Only results
+        dfXy[colexport].to_parquet(path_check_out + "/pred_check.parquet")  # Only results
+        
+        dfXy.to_parquet(path_check_out     + "/dfX.parquet")      # train input data 
+        dfXytest.to_parquet(path_check_out + "/dfXtest.parquet")  # Test input data 
 
-        dfXy.to_parquet(path_check_out + "/dfX.parquet")  # train input data generate parquet
-        dfXytest.to_parquet(path_check_out + "/dfXtest.parquet")  # Test input data  generate parquet
-
-        #dfXy.to_csv(path_check_out + "/dfX.csv")  # train input data generate csv
-        #dfXytest.to_csv(path_check_out + "/dfXtest.csv")  # Test input data  generate csv
         log("######### Finish #############################################################", )
 
 

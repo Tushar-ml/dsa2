@@ -79,7 +79,7 @@ def config1() :
        ONE SINGLE DICT Contains all needed informations for  used for titanic classification task
     """
     data_name    = "titanic"         ### in data/input/
-    model_class  = "source/models/keras_widedeep_dense.py"  ### ACTUAL Class name for
+    model_class  = "source/models/keras_widedeep.py::WideDeep_sparse"  ### ACTUAL Class name for
     n_sample     = 1000
 
     def post_process_fun(y):   ### After prediction is done

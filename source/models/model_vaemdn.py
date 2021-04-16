@@ -4,13 +4,15 @@
 Multi Density Variationnal Autoencoder
 Only with TF1
 
+
+
+
 """
 import os, sys,copy, pathlib, pprint, json, pandas as pd, numpy as np, scipy as sci, sklearn
 
 ####################################################################################################
-try   : verbosity = int(json.load(open(os.path.dirname(os.path.abspath(__file__)) + "/../../config.json", mode='r'))['verbosity'])
-except Exception as e : verbosity = 2
-#raise Exception(f"{e}")
+from utilmy import global_verbosity, os_makedirs
+verbosity = global_verbosity(__file__, "/../../config.json" ,default= 5)
 
 def log(*s):
     print(*s, flush=True)
@@ -20,10 +22,6 @@ def log2(*s):
 
 def log3(*s):
     if verbosity >= 3 : print(*s, flush=True)
-
-def os_makedirs(dir_or_file):
-    if os.path.isfile(dir_or_file) :os.makedirs(os.path.dirname(os.path.abspath(dir_or_file)), exist_ok=True)
-    else : os.makedirs(os.path.abspath(dir_or_file), exist_ok=True)
 
 ####################################################################################################
 global model, session
@@ -766,7 +764,7 @@ def test_dataset_petfinder(nrows=1000):
 
 
 def train_test_split2(df, coly):
-    log3(df.dtypes)~
+    # log3(df.dtypes)
     y = df[coly] ### If clonassificati
     X = df.drop(coly,  axis=1)
     log3('y', np.sum(y[y==1]) , X.head(3))
@@ -1078,3 +1076,74 @@ if __name__ == "__main__":
     model.fit(dataset, epochs=5)
 
 """
+
+
+
+
+
+
+'''from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import GaussianNB
+from sklearn.svm import SVC
+from sklearn.model_selection import train_test_split
+
+import matplotlib.pyplot as plt
+import seaborn as sb
+
+from pmlb import fetch_data, classification_dataset_names
+
+logit_test_scores = []
+gnb_test_scores = []
+
+for classification_dataset in classification_dataset_names[:5]:
+    X, y = fetch_data(classification_dataset, return_X_y=True)
+    train_X, test_X, train_y, test_y = train_test_split(X, y)
+
+    logit = SVC()
+    gnb = GaussianNB()
+
+    logit.fit(train_X, train_y)
+    gnb.fit(train_X, train_y)
+
+    logit_test_scores.append(logit.score(test_X, test_y))
+    gnb_test_scores.append(gnb.score(test_X, test_y))
+
+print(logit_test_scores,gnb_test_scores)
+sb.boxplot(data=[logit_test_scores, gnb_test_scores], notch=True)
+plt.xticks([0, 1], ['LogisticRegression', 'GaussianNB'])
+plt.ylabel('Test Accuracy')
+plt.show()'''
+
+'''import sdmetrics
+
+# Load the demo data, which includes:
+# - A dict containing the real tables as pandas.DataFrames.
+# - A dict containing the synthetic clones of the real data.
+# - A dict containing metadata about the tables.
+real_data, synthetic_data, metadata = sdmetrics.load_demo()
+
+# Obtain the list of multi table metrics, which is returned as a dict
+# containing the metric names and the corresponding metric classes.
+print(real_data)
+'''
+'''metrics = sdmetrics.multi_table.MultiTableMetric.get_subclasses()
+
+# Run all the compatible metrics and get a report
+print(sdmetrics.compute_metrics(metrics, real_data, synthetic_data, metadata=metadata))'''
+
+def test4():
+    from sdv.demo import load_tabular_demo
+
+    from sdv.tabular import GaussianCopula
+
+    real_data = load_tabular_demo('student_placements')
+
+    model = GaussianCopula()
+
+    model.fit(real_data)
+
+    synthetic_data = model.sample()
+
+    from sdv.evaluation import evaluate
+
+    print(evaluate(synthetic_data, real_data))

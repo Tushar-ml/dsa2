@@ -1,16 +1,13 @@
 # pylint: disable=C0321,C0103,C0301,E1305,E1121,C0302,C0330,C0111,W0613,W0611,R1705
 # -*- coding: utf-8 -*-
 """
-
-
-
 """
 import os, sys,copy, pathlib, pprint, json, pandas as pd, numpy as np, scipy as sci, sklearn
 
 ####################################################################################################
-try   : verbosity = int(json.load(open(os.path.dirname(os.path.abspath(__file__)) + "/../../config.json", mode='r'))['verbosity'])
-except Exception as e : verbosity = 2
-#raise Exception(f"{e}")
+from utilmy import global_verbosity, os_makedirs
+
+verbosity = global_verbosity(__file__, "/../../config.json" ,default= 5)
 
 def log(*s):
     print(*s, flush=True)
@@ -20,10 +17,6 @@ def log2(*s):
 
 def log3(*s):
     if verbosity >= 3 : print(*s, flush=True)
-
-def os_makedirs(dir_or_file):
-    if os.path.isfile(dir_or_file) :os.makedirs(os.path.dirname(os.path.abspath(dir_or_file)), exist_ok=True)
-    else : os.makedirs(os.path.abspath(dir_or_file), exist_ok=True)
 
 ####################################################################################################
 global model, session
@@ -45,36 +38,6 @@ from sklearn.cluster import *
 from sklearn.tree import *
 from lightgbm import LGBMModel, LGBMRegressor, LGBMClassifier
 
-
-try :
-    #### All are Un-supervised Model
-    from pyod.models.abod  import *
-    from pyod.models.auto_encoder import *
-    from pyod.models.cblof import *
-    from pyod.models.cof import *
-    from pyod.models.combination import *
-    from pyod.models.copod import *
-    from pyod.models.feature_bagging import *
-    from pyod.models.hbos import *
-    from pyod.models.iforest import *
-    from pyod.models.knn import *
-    from pyod.models.lmdd import *
-    from pyod.models.loda import *
-    from pyod.models.lof import *
-    from pyod.models.loci import *
-    from pyod.models.lscp import *
-    from pyod.models.mad import *
-    from pyod.models.mcd import *
-    from pyod.models.mo_gaal import *
-    from pyod.models.ocsvm import *
-    from pyod.models.pca import *
-    from pyod.models.sod import *
-    from pyod.models.so_gaal import *
-    from pyod.models.sos import *
-    from pyod.models.vae import *
-    from pyod.models.xgbod import *
-except :
-    print("cannot import pyod")
 
 
 def model_automl():
@@ -110,8 +73,8 @@ def fit(data_pars=None, compute_pars=None, out_pars=None, **kw):
     """
     global model, session
     session = None  # Session type for compute
-    Xtrain, ytrain, Xtest, ytest = get_dataset(data_pars, task_type="train")
-    log(Xtrain.shape, model.model)
+    Xtrain, ytrain, Xtest, ytest = get_dataset2(data_pars, task_type="train")
+    log2(Xtrain.shape, model.model)
 
     if "LGBM" in model.model_pars['model_class']:
         model.model.fit(Xtrain, ytrain, eval_set=[(Xtest, ytest)], **compute_pars.get("compute_pars", {}))
@@ -119,43 +82,24 @@ def fit(data_pars=None, compute_pars=None, out_pars=None, **kw):
         model.model.fit(Xtrain, ytrain, **compute_pars.get("compute_pars", {}))
 
 
-def eval(data_pars=None, compute_pars=None, out_pars=None, **kw):
-    """
-       Return metrics of the model when fitted.
-    """
-    global model, session
-    data_pars['train'] = True
-    Xval, yval = get_dataset(data_pars, task_type="eval")
-    ypred = predict(Xval, data_pars, compute_pars, out_pars)
-
-    # log(data_pars)
-    mpars = compute_pars.get("metrics_pars", {'metric_name': 'mae'})
-
-    scorer = {
-        "rmse": sklearn.metrics.mean_squared_error,
-        "mae": sklearn.metrics.mean_absolute_error
-    }[mpars['metric_name']]
-
-    mpars2 = mpars.get("metrics_pars", {})  ##Specific to score
-    score_val = scorer(yval, ypred, **mpars2)
-    ddict = [{"metric_val": score_val, 'metric_name': mpars['metric_name']}]
-
-    return ddict
-
-
 def predict(Xpred=None, data_pars={}, compute_pars={}, out_pars={}, **kw):
     global model, session
 
     if Xpred is None:
-        data_pars['train'] = False
         Xpred = get_dataset(data_pars, task_type="predict")
+    else :
+        if data_pars.get('type', 'pandas') in ['pandas', 'ram']:
+            Xpred,_ = get_dataset_split_for_model_pandastuple(Xpred, ytrain=None, data_pars= data_pars, )
+        else :
+            raise Exception("not implemented")
 
+    log3('Xpred', Xpred)
     ypred = model.model.predict(Xpred)
-    #ypred = post_process_fun(ypred)
-    
-    ypred_proba = None  ### No proba    
+
+    ##### Probability  ################################
+    ypred_proba = None
     if compute_pars.get("probability", False):
-         ypred_proba = model.model.predict_proba(Xpred) 
+         ypred_proba = model.model.predict_proba(Xpred)
     return ypred, ypred_proba
 
 
@@ -194,58 +138,28 @@ def load_info(path=""):
             dd[key] = obj
     return dd
 
-
-def preprocess(prepro_pars):
-    if prepro_pars['type'] == 'test':
-        from sklearn.datasets import make_classification
-        from sklearn.model_selection import train_test_split
-
-        X, y = make_classification(n_features=10, n_redundant=0, n_informative=2,
-                                   random_state=1, n_clusters_per_class=1)
-
-        # log(X,y)
-        Xtrain, Xtest, ytrain, ytest = train_test_split(X, y)
-        return Xtrain, ytrain, Xtest, ytest
-
-    if prepro_pars['type'] == 'train':
-        from sklearn.model_selection import train_test_split
-        df = pd.read_csv(prepro_pars['path'])
-        dfX = df[prepro_pars['colX']]
-        dfy = df[prepro_pars['coly']]
-        Xtrain, Xtest, ytrain, ytest = train_test_split(dfX.values, dfy.values,
-                                                        stratify=dfy.values,test_size=0.1)
-        return Xtrain, ytrain, Xtest, ytest
-
-    else:
-        df = pd.read_csv(prepro_pars['path'])
-        dfX = df[prepro_pars['colX']]
-
-        Xtest, ytest = dfX, None
-        return None, None, Xtest, ytest
-
-
 ####################################################################################################
 THISMODEL_COLGROUPS = []
 def get_dataset_split_for_model_pandastuple(Xtrain, ytrain=None, data_pars=None, ):
     """  Split data for moel input/
     Xtrain  ---> Split INTO  tuple of data  Xtuple= (df1, df2, df3) to fit model input.
-
     :param Xtrain:
     :param coldataloader_received:
     :param colmodel_ref:
     :return:
     """
     from utilmy import pd_read_file
-    coldataloader_received,  = data_pars.get('cols_model_type2', {})
-    colmodel_ref             = THISMODEL_COLGROUPS
+    coldataloader_received  = data_pars.get('cols_model_type2', {})   ### column defined in Data
+    colmodel_ref            = THISMODEL_COLGROUPS   ### Column defined here
 
     ### Into RAM
-    if isinstance(Xtrain, str) : Xtrain = pd_read_file(Xtrain, verbose=False)
-    if isinstance(ytrain, str) : ytrain = pd_read_file(ytrain, verbose=False)
+    if isinstance(Xtrain, str) : Xtrain = pd_read_file(Xtrain + "*", verbose=False)
+    if isinstance(ytrain, str) : ytrain = pd_read_file(ytrain + "*", verbose=False)
 
 
+    ##########################################################################
     if len(colmodel_ref) <= 1 :   ## No split
-        return Xtrain
+        return Xtrain, ytrain
 
     ### Split the pandas columns into different pieces  ######################
     Xtuple_train = []
@@ -257,52 +171,34 @@ def get_dataset_split_for_model_pandastuple(Xtrain, ytrain=None, data_pars=None,
     return Xtuple_train, ytrain
 
 
-def get_dataset_split_for_model(d, data_pars):
-     if 'Xtrain' in d and 'ytrain' in d and 'Xtest' in d  and 'ytest' in d:
-         Xtrain, ytrain = get_dataset_split_for_model_pandastuple(d['Xtrain'], d['ytrain'],  data_pars)
-         Xtest, ytest   = get_dataset_split_for_model_pandastuple(d['Xtest'], d['ytest'],    data_pars)
-         return Xtrain, ytrain, Xtest, ytest
-
-     if 'X' in d and 'y' in d :
-         Xtrain, ytrain = get_dataset_split_for_model_pandastuple(d['X'], d['y'],  data_pars)
-         return Xtrain, ytrain
-
-     if 'X'  in d :
-         Xtrain, _ = get_dataset_split_for_model_pandastuple(d['X'], None,  data_pars)
-         return Xtrain, None
-
-
-
 def get_dataset2(data_pars=None, task_type="train", **kw):
     """
-      "ram"  :
-      "file" :
+       Raw Data (Path)   --->  Input Object (ie Pandas, ...) for Model training
     """
-    # log(data_pars)
-    data_type = data_pars.get('type', 'ram')
+    log3('data_pars', data_pars)
+    data_type            = data_pars.get('type', 'pandas')
+    d                    = data_pars[task_type]
+    data_pars[task_type] = None    ### Save memory
 
-    if task_type == "predict":
-        d = data_pars[task_type]
-        data_pars[task_type] = None    ### Save memory
-        d = get_dataset_split_for_model(d, data_pars )
-        return d["X"]
+    if data_type in [ 'pandas', 'ram'] :
+        if task_type == "predict":
+            Xtrain, _ = get_dataset_split_for_model_pandastuple(d['X'], None,  data_pars)
+            return Xtrain
 
-    if task_type == "eval":
-        d = data_pars[task_type]
-        data_pars[task_type] = None
-        d = get_dataset_split_for_model(d, data_pars )
-        return d["X"], d["y"]
+        if task_type == "eval":
+            Xtrain, ytrain = get_dataset_split_for_model_pandastuple(d['X'], d['y'],  data_pars)
+            return Xtrain, ytrain
 
-    if task_type == "train":
-        d = data_pars[task_type]
-        data_pars[task_type] = None
-        d = get_dataset_split_for_model(d, data_pars )
-        return d["Xtrain"], d["ytrain"], d["Xtest"], d["ytest"]
+        if task_type == "train":
+            Xtrain, ytrain = get_dataset_split_for_model_pandastuple(d['Xtrain'], d['ytrain'],  data_pars)
+            Xtest, ytest   = get_dataset_split_for_model_pandastuple(d['Xtest'],  d['ytest'],   data_pars)
+            return Xtrain, ytrain, Xtest, ytest
+
 
 
 def get_dataset(data_pars=None, task_type="train", **kw):
     """
-      "ram"  : 
+      "ram"  :
       "file" :
     """
     # log(data_pars)
@@ -326,12 +222,6 @@ def get_dataset(data_pars=None, task_type="train", **kw):
 
     elif data_type == "file":
         raise Exception(f' {data_type} data_type Not implemented ')
-
-    raise Exception(f' Requires  Xtrain", "Xtest", "ytrain", "ytest" ')
-
-
-
-
 
 
 def get_params_sklearn(deep=False):
@@ -358,52 +248,22 @@ def get_params(param_pars={}, **kw):
 
 
 #################################################################################################################
-def test_dataset_classi_fake(nrows=500):
-    from sklearn import datasets as sklearn_datasets
-    ndim=11
-    coly   = 'y'
-    colnum = ["colnum_" +str(i) for i in range(0, ndim) ]
-    colcat = ['colcat_1']
-    X, y    = sklearn_datasets.make_classification(
-              n_samples=10000, n_features=ndim, n_classes=1, n_redundant = 0, n_informative=ndim )
-    df = pd.DataFrame(X,  columns= colnum)
-    for ci in colcat :
-      df[ci] = np.random.randint(0,1, len(df))
-    df[coly]   = y.reshape(-1, 1)
-    # log(df)
-    return df, colnum, colcat, coly
-
-
-def train_test_split2(df, coly):
-    log3(df.dtypes)
-    y = df[coly] ### If clonassificati
-    X = df.drop(coly,  axis=1)
-    log3('y', np.sum(y[y==1]) , X.head(3))
-    ######### Split the df into train/test subsets
-    X_train_full, X_test, y_train_full, y_test = train_test_split(X, y, test_size=0.05, random_state=2021)
-    X_train, X_valid, y_train, y_valid         = train_test_split(X_train_full, y_train_full, random_state=2021)
-
-    #####
-    # y = y.astype('uint8')
-    num_classes                                = len(set(y_train_full.values.ravel()))
-
-    return X,y, X_train, X_valid, y_train, y_valid, X_test,  y_test, num_classes
-
-
 def test(n_sample          = 1000):
-    df, colnum, colcat, coly = test_dataset_classi_fake(nrows= n_sample)
-    X,y, X_train, X_valid, y_train, y_valid, X_test,  y_test, num_classes  = train_test_split2(df, coly)
-  
+
+    from adatasets import test_dataset_classification_fake, pd_train_test_split2
+    df, d = test_dataset_classification_fake(nrows= n_sample)
+    colnum, colcat, coly = d['colnum'], d['colcat'], d['coly']
+    X,y, X_train, X_valid, y_train, y_valid, X_test,  y_test, num_classes  = pd_train_test_split2(df, coly)
+
     cols_input_type_1 = []
     #### Matching Big dict  ##################################################
     def post_process_fun(y): return int(y)
     def pre_process_fun(y):  return int(y)
 
-
     m = {
     'model_pars': {
         'model_class':  "model_sklearn.py::LightGBM"
-        ,'model_pars' : {  }  
+        ,'model_pars' : {  }
         , 'post_process_fun' : post_process_fun   ### After prediction  ##########################################
         , 'pre_process_pars' : {'y_norm_fun' :  pre_process_fun ,  ### Before training  ##########################
             ### Pipeline for data processing ##############################
@@ -419,55 +279,49 @@ def test(n_sample          = 1000):
 
             ],
             }
-        },
+    },
 
     'compute_pars': { 'metric_list': ['accuracy_score','average_precision_score']
-                    },
+     },
 
     'data_pars': { 'n_sample' : n_sample,
         'download_pars' : None,
         'cols_input_type' : cols_input_type_1,
         ### family of columns for MODEL  #########################################################
-        'cols_model_group': [ 'colnum_bin',   'colcat_bin',
-                            ]
+        'cols_model_group': [ 'colnum_bin',   'colcat_bin', ]
 
         ,'cols_model_group_custom' :  { 'colnum' : colnum,
                                         'colcat' : colcat,
                                         'coly' : coly
-                            }
-        ###################################################  
-        ,'train': {'Xtrain': X_train, 'ytrain': y_train,
-                   'Xtest': X_valid,  'ytest':  y_valid},
-                'eval': {'X': X_valid,  'y': y_valid},
-                'predict': {'X': X_valid}
+                                      }
+        ###################################################
+        ,'train': {'Xtrain':    X_train, 'ytrain': y_train,
+                   'Xtest':     X_valid,  'ytest':  y_valid},
+                   'eval':    {'X': X_valid,  'y': y_valid},
+                   'predict': {'X': X_valid}
 
         ### Filter data rows   ##################################################################
         ,'filter_pars': { 'ymax' : 2 ,'ymin' : -1 },
 
-        
+
         ### Added continuous & sparse features groups ###
         'cols_model_type2': {
             'colcontinuous':   colnum ,
-            'colsparse' : colcat, 
+            'colsparse' : colcat,
         },
         }
     }
 
     ##### Running loop
-    """https://github.com/manujosephv/pytorch_tabular/blob/main/tests/test_mdn.py
-    
-
-    """
     ll = [
-        ('torch_tabular.py::CategoryEmbeddingModelConfig', 
+        ('torch_tabular.py::CategoryEmbeddingModelConfig',
             {   'task': "classification",
                 'metrics' : ["f1","accuracy"],
                 'metrics_params' : [{"num_classes":num_classes},{}]
-            }  
+            }
         ),
     ]
     for cfg in ll:
-        log("******************************************** New Model ********************************************")
         log(f"******************************************** {cfg[0]} ********************************************")
         reset()
         # Set the ModelConfig
@@ -490,66 +344,93 @@ def test(n_sample          = 1000):
         reset()
 
 
-
-def test2():
-    """
-        from pyod.models.abod  import *
-    from pyod.models.auto_encoder import *
-    from pyod.models.cblof import *
-    from pyod.models.cof import *
-    from pyod.models.combination import *
-    from pyod.models.copod import *
-    from pyod.models.feature_bagging import *
-    from pyod.models.hbos import *
-    from pyod.models.iforest import *
-    from pyod.models.knn import *
-    from pyod.models.lmdd import *
-    from pyod.models.loda import *
-    from pyod.models.lof import *
-    from pyod.models.loci import *
-    from pyod.models.lscp import *
-    from pyod.models.mad import *
-    from pyod.models.mcd import *
-    from pyod.models.mo_gaal import *
-    from pyod.models.ocsvm import *
-    from pyod.models.pca import *
-    from pyod.models.sod import *
-    from pyod.models.so_gaal import *
-    from pyod.models.sos import *
-    from pyod.models.vae import *
-    from pyod.models.xgbod import *
-
-    https://pyod.readthedocs.io/en/latest/pyod.html
-
-    :return:
-    """
-    global model
-    try:
-        from pmlb import fetch_data, classification_dataset_names
-    except:
-        log("Installing pmlb...")
-        os.system("pip install pmlb")
-        log("Pmlb Installed")
-        from pmlb import fetch_data, classification_dataset_names
-
-
-    ####
-    m = template_dict()
-    ll= [ 'PCA', 'SO_GAAL', 'VAE', 'HBOS' ]
-
-    for dataset in classification_dataset_names :
-      for modeli in  ll:
-         m['model_class'] = modeli
-
-
-
-
-
-
-
-
 if __name__ == "__main__":
     import fire
     fire.Fire()
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+"""
+def get_dataset_split_for_model(d, data_pars):
+     if 'Xtrain' in d and 'ytrain' in d and 'Xtest' in d  and 'ytest' in d:
+         Xtrain, ytrain = get_dataset_split_for_model_pandastuple(d['Xtrain'], d['ytrain'],  data_pars)
+         Xtest, ytest   = get_dataset_split_for_model_pandastuple(d['Xtest'], d['ytest'],    data_pars)
+         return Xtrain, ytrain, Xtest, ytest
+
+     if 'X' in d and 'y' in d :
+         Xtrain, ytrain = get_dataset_split_for_model_pandastuple(d['X'], d['y'],  data_pars)
+         return Xtrain, ytrain
+
+     if 'X'  in d :
+         Xtrain, _ = get_dataset_split_for_model_pandastuple(d['X'], None,  data_pars)
+         return Xtrain, None
+"""
+
+
+
+
+
+
+
+def zz_eval(data_pars=None, compute_pars=None, out_pars=None, **kw):
+    """
+       Return metrics of the model when fitted.
+    """
+    global model, session
+    data_pars['train'] = True
+    Xval, yval = get_dataset(data_pars, task_type="eval")
+    ypred = predict(Xval, data_pars, compute_pars, out_pars)
+
+    # log(data_pars)
+    mpars = compute_pars.get("metrics_pars", {'metric_name': 'mae'})
+
+    scorer = {
+        "rmse": sklearn.metrics.mean_squared_error,
+        "mae": sklearn.metrics.mean_absolute_error
+    }[mpars['metric_name']]
+
+    mpars2 = mpars.get("metrics_pars", {})  ##Specific to score
+    score_val = scorer(yval, ypred, **mpars2)
+    ddict = [{"metric_val": score_val, 'metric_name': mpars['metric_name']}]
+
+    return ddict
+
+
+def zz_preprocess(prepro_pars):
+    if prepro_pars['type'] == 'test':
+        from sklearn.datasets import make_classification
+        from sklearn.model_selection import train_test_split
+
+        X, y = make_classification(n_features=10, n_redundant=0, n_informative=2,
+                                   random_state=1, n_clusters_per_class=1)
+
+        # log(X,y)
+        Xtrain, Xtest, ytrain, ytest = train_test_split(X, y)
+        return Xtrain, ytrain, Xtest, ytest
+
+    if prepro_pars['type'] == 'train':
+        from sklearn.model_selection import train_test_split
+        df = pd.read_csv(prepro_pars['path'])
+        dfX = df[prepro_pars['colX']]
+        dfy = df[prepro_pars['coly']]
+        Xtrain, Xtest, ytrain, ytest = train_test_split(dfX.values, dfy.values,
+                                                        stratify=dfy.values,test_size=0.1)
+        return Xtrain, ytrain, Xtest, ytest
+
+    else:
+        df = pd.read_csv(prepro_pars['path'])
+        dfX = df[prepro_pars['colX']]
+
+        Xtest, ytest = dfX, None
+        return None, None, Xtest, ytest

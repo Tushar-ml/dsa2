@@ -8,12 +8,11 @@ import warnings, sys, gc, os, pandas as pd, json, copy, numpy as np
 warnings.filterwarnings('ignore')
 
 ####################################################################################################
-try   : verbosity = int(json.load(open(os.path.dirname(os.path.abspath(__file__)) + "/../config.json", mode='r'))['verbosity'])
-except Exception as e : verbosity = 4
-#raise Exception(f"{e}")
+from utilmy import global_verbosity, os_makedirs
+verbosity = global_verbosity(__file__, "/../config.json" ,default= 5)
 
 def log(*s):
-    print(*s, flush=True)
+    if verbosity >= 1 : print(*s, flush=True)
 
 def log2(*s):
     if verbosity >= 2 : print(*s, flush=True)
@@ -21,9 +20,6 @@ def log2(*s):
 def log3(*s):
     if verbosity >= 3 : print(*s, flush=True)
 
-def os_makedirs(dir_or_file):
-    if os.path.isfile(dir_or_file) :os.makedirs(os.path.dirname(os.path.abspath(dir_or_file)), exist_ok=True)
-    else : os.makedirs(os.path.abspath(dir_or_file), exist_ok=True)
 
 
 ####################################################################################################
@@ -35,8 +31,8 @@ import util_feature
 
 ####################################################################################################
 def log4(*s, n=0, m=1):
-    if verbosity >= 4: 
-     print(*s,"\n", flush=True)
+    if verbosity >= 4:
+       print(*s,"\n", flush=True)
 
 def log4_pd(name, df, *s):
     if verbosity >= 4: 
@@ -53,15 +49,10 @@ def _pd_colnum_fill_na_median(df, col, pars):
         df[quant_col].fillna((df[quant_col].median()), inplace=True)
 
 
-
-
 ####################################################################################################
 ####################################################################################################
 def prepro_load(prefix, pars):
     """  Load previously savec preprocessors
-    :param prefix:
-    :param pars:
-    :return:
     """
     prepro = None
     pars_saved = None
@@ -76,13 +67,6 @@ def prepro_load(prefix, pars):
 
 def prepro_save(prefix, pars, df_new, cols_new, prepro) -> (pd.DataFrame, dict) :
     """  Save preprocessors and export
-    :param prefix:
-    :param pars:
-    :param df_new:
-    :param cols_new:
-    :param prepro:
-    :param pars_prepro:
-    :return:
     """
     ### Clean Pars of extra heavy data
     pars2= {}
@@ -767,10 +751,6 @@ def pd_col_genetic_transform(df: pd.DataFrame, col: list=None, pars: dict=None):
        prefix :  col_new  ### list
     }
     return df_genetic, col_pars
-
-
-
-
 
 
 ######################################################################################

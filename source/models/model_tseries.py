@@ -6,30 +6,11 @@ Template for tseries type of model:
 
 """
 import os, pandas as pd, numpy as np, scipy as sci, sklearn
-from sklearn.linear_model import *
-from sklearn.svm import *
-from sklearn.ensemble import *
-from sklearn.tree import *
-from lightgbm import LGBMModel, LGBMRegressor, LGBMClassifier
-from sktime.forecasting.base import ForecastingHorizon
-from sktime.transformers.single_series.detrend import Deseasonalizer, Detrender
-from sktime.forecasting.trend import PolynomialTrendForecaster
-from sktime.forecasting.model_selection import (
-    temporal_train_test_split,
-)
-from sktime.utils.plotting import plot_series
-from sktime.forecasting.compose import (
-    TransformedTargetForecaster,
-    ReducedRegressionForecaster
-)
-
-try :
-   from supervised.automl import *
-except:
-    print('cannot import automl')
 
 ####################################################################################################
-VERBOSE = True
+from utilmy import global_verbosity, os_makedirs
+verbosity = global_verbosity(__file__, "/../../config.json" ,default= 5)
+
 
 def log(*s):
     print(*s, flush=True)
@@ -51,6 +32,23 @@ def reset():
     model, session = None, None
 
 ####################################################################################################
+from sklearn.linear_model import *
+from sklearn.ensemble import *
+from sklearn.tree import *
+from lightgbm import LGBMModel, LGBMRegressor, LGBMClassifier
+from sktime.forecasting.base import ForecastingHorizon
+from sktime.transformers.single_series.detrend import Deseasonalizer, Detrender
+from sktime.forecasting.trend import PolynomialTrendForecaster
+from sktime.forecasting.model_selection import (
+    temporal_train_test_split,
+)
+from sktime.utils.plotting import plot_series
+from sktime.forecasting.compose import (
+    TransformedTargetForecaster,
+    ReducedRegressionForecaster
+)
+
+
 class myModel(object):
     pass
 
@@ -67,7 +65,7 @@ class Model(object):
         else:
             model_class = globals()[model_pars['model_class']]
             self.model = model_class(**model_pars['model_pars'])
-            if VERBOSE: log(model_class, self.model)
+            log(model_class, self.model)
 
 
 def fit(data_pars=None, compute_pars=None, out_pars=None, **kw):
@@ -76,7 +74,7 @@ def fit(data_pars=None, compute_pars=None, out_pars=None, **kw):
     global model, session
     session = None  # Session type for compute
     Xtrain, ytrain, Xtest, ytest = get_dataset(data_pars, task_type="train")
-    if VERBOSE: log(Xtrain.shape, model.model)
+    log(Xtrain.shape, model.model)
 
     if "LGBM" in model.model_pars['model_class']:
         model.model.fit(Xtrain, ytrain, eval_set=[(Xtest, ytest)], **compute_pars.get("compute_pars", {}))

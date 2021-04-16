@@ -24,10 +24,21 @@ import warnings, os, sys, re,  pandas as pd, numpy as np, copy, pdb
 warnings.filterwarnings('ignore')
 
 ####################################################################################################
+from utilmy import global_verbosity, os_makedirs
+verbosity = global_verbosity(__file__, "/../config.json" ,default= 5)
+
+def log(*s):
+    if verbosity >= 1 : print(*s, flush=True)
+
+def log2(*s):
+    if verbosity >= 2 : print(*s, flush=True)
+
+def log3(*s):
+    if verbosity >= 3 : print(*s, flush=True)
+
+####################################################################################################
 #### Add path for python import
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/")
-
-#### Root folder analysis
 root = os.path.abspath(os.getcwd()).replace("\\", "/") + "/"
 print(root)
 
@@ -35,12 +46,6 @@ DEBUG= True
 ####################################################################################################
 from util_feature import (load, save_list, load_function_uri,  save,
                           save_features, load_features)
-
-def log(*s, n=0, m=0):
-    sspace = "#" * n
-    sjump = "\n" * m
-    print(*s, fluhs=True)
-
 
 def logd(*s, n=0, m=0):
     if DEBUG :

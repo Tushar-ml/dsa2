@@ -3,15 +3,12 @@
 """
 python torch_rvae.py test --nrows 1000
 python torch_rvae.py test2 --nrows 1000
-
-
 """
 import os, sys,copy, pathlib, pprint, json, pandas as pd, numpy as np, scipy as sci, sklearn
 
 ####################################################################################################
-try   : verbosity = int(json.load(open(os.path.dirname(os.path.abspath(__file__)) + "/../../config.json", mode='r'))['verbosity'])
-except Exception as e : verbosity = 2
-#raise Exception(f"{e}")
+from utilmy import global_verbosity, os_makedirs
+verbosity = global_verbosity(__file__, "/../../config.json" ,default= 5)
 
 def log(*s):
     print(*s, flush=True)
@@ -21,10 +18,6 @@ def log2(*s):
 
 def log3(*s):
     if verbosity >= 3 : print(*s, flush=True)
-
-def os_makedirs(dir_or_file):
-    if os.path.isfile(dir_or_file) :os.makedirs(os.path.dirname(os.path.abspath(dir_or_file)), exist_ok=True)
-    else : os.makedirs(os.path.abspath(dir_or_file), exist_ok=True)
 
 ####################################################################################################
 global model, session
@@ -81,6 +74,8 @@ class Model(object):
         model_pars2.update(self.compute_pars['compute_pars'])
         model_pars2.update(self.compute_pars['compute_extra'])
         model_pars2.update(self.data_pars)
+        model_pars2.update(self.data_pars['data_pars'])
+
         model_pars2.update(self.global_pars)
 
     
@@ -373,7 +368,7 @@ def save(path=None, info=None):
     os.makedirs(path + "/model/", exist_ok=True)
 
     #### Torch part
-    model.model.save_model(path + "/model/torch_checkpoint")
+    model.model.save_model(path + "/model/torch_rvae_checkpoint")
 
     #### Wrapper
     model.model = None   ## prevent issues
@@ -393,143 +388,82 @@ def load_info(path=""):
     return dd
 
 
-# cols_ref_formodel = ['cols_single_group']
-cols_ref_formodel = ['colcontinuous', 'colsparse']
-def get_dataset_tuple(Xtrain, cols_type_received, cols_ref):
-    """  Split into Tuples to feed  Xyuple = (df1, df2, df3) OR single dataframe
-    :param Xtrain:
-    :param cols_type_received:
-    :param cols_ref:
-    :return:
-    """
-    if len(cols_ref) <= 1 :
-        return Xtrain
-
-    Xtuple_train = []
-    # cols_ref is the reference for types of cols groups (sparse/continuous)
-    # This will result in deviding the dataset into many groups of features
-    for cols_groupname in cols_ref :
-        # Assert the group name is in the cols reference
-        assert cols_groupname in cols_type_received, "Error missing colgroup in config data_pars[cols_model_type] "
-        cols_i = cols_type_received[cols_groupname]
-        # Add the columns of this group to the list
-        Xtuple_train.append( Xtrain[cols_i] )
-
-    if len(cols_ref) == 1 :
-        return Xtuple_train[0]  ### No tuple
-    else :
-        return Xtuple_train
-
-
-def get_dataset2(data_pars=None, task_type="train", **kw):
-    """  Return tuple of dataframes
-    """
-    # log(data_pars)
-    data_type = data_pars.get('type', 'ram')
-    cols_ref  = cols_ref_formodel
-
-    if data_type == "ram":
-        # cols_ref_formodel = ['cols_cross_input', 'cols_deep_input', 'cols_deep_input' ]
-        ### dict  colgroup ---> list of colname
-
-        cols_type_received     = data_pars.get('cols_model_type2', {} )  ##3 Sparse, Continuous
-
-        if task_type == "predict":
-            d = data_pars[task_type]
-            Xtrain       = d["X"]
-            Xtuple_train = get_dataset_tuple(Xtrain, cols_type_received, cols_ref)
-            return Xtuple_train
-
-        if task_type == "eval":
-            d = data_pars[task_type]
-            Xtrain, ytrain  = d["X"], d["y"]
-            Xtuple_train    = get_dataset_tuple(Xtrain, cols_type_received, cols_ref)
-            return Xtuple_train, ytrain
-
-        if task_type == "train":
-            d = data_pars[task_type]
-            Xtrain, ytrain, Xtest, ytest  = d["Xtrain"], d["ytrain"], d["Xtest"], d["ytest"]
-
-            ### dict  colgroup ---> list of df
-            Xtuple_train = get_dataset_tuple(Xtrain, cols_type_received, cols_ref)
-            Xtuple_test  = get_dataset_tuple(Xtest, cols_type_received, cols_ref)
-            log2("Xtuple_train", Xtuple_train)
-
-            return Xtuple_train, ytrain, Xtuple_test, ytest
-
-
-    elif data_type == "file":
-        raise Exception(f' {data_type} data_type Not implemented ')
-
-    raise Exception(f' Requires  Xtrain", "Xtest", "ytrain", "ytest" ')
-
-
 
 ####################################################################################################
 ############ Test  #################################################################################
 def test(nrows=1000):
-    """nrows : take first nrows from dataset
+    """
     """
     global model, session
-    m = {'model_pars': {
-            # Specify the model
-            'model_class':  "torch_tabular.py::RVAE",
-            'model_pars' : {"activation":'relu', "outlier_model":'RVAE', "AVI":False, "alpha_prior":0.95, 
-                            "embedding_size":50, "is_one_hot":False, "latent_dim":20, "layer_size":400,
-            }          
-        },
+    # m = {'model_pars': {
+    #         # Specify the model
+    #         'model_class':  "torch_tabular.py::RVAE",
+    #         'model_pars' : {
+    #             "activation":'relu', "outlier_model":'RVAE', "AVI":False, "alpha_prior":0.95,
+    #             "embedding_size":50, "is_one_hot":False, "latent_dim":20, "layer_size":400,
+    #         }
+    #     },
 
-        'compute_pars': {
-            'compute_extra' :{
-                "log_interval":50,
-                "save_on":True,
-                "verbose_metrics_epoch":True,
-                "verbose_metrics_feature_epoch":False
-            },
+    #     'compute_pars': {
+    #         'compute_extra' :{
+    #             "log_interval":50,
+    #             "save_on":True,
+    #             "verbose_metrics_epoch":True,
+    #             "verbose_metrics_feature_epoch":False
+    #         },
 
-            'compute_pars' :{
-                "cuda_on":False, "number_epochs":1, "l2_reg":0.0, "lr":0.001, "seqvae_bprop":False, "seqvae_steps":4,
-                "seqvae_two_stage":False, "std_gauss_nll":2.0, "steps_2stage":4, "inference_type":'vae',
-                "batch_size":150,
-            },
+    #         'compute_pars' :{
+    #             "cuda_on":False, "number_epochs":1, "l2_reg":0.0, "lr":0.001, "seqvae_bprop":False, "seqvae_steps":4,
+    #             "seqvae_two_stage":False, "std_gauss_nll":2.0, "steps_2stage":4, "inference_type":'vae',
+    #             "batch_size":150,
+    #         },
 
-            'metric_list': ['accuracy_score', 'average_precision_score' ],            
-        },
+    #         'metric_list': ['accuracy_score', 'average_precision_score'],
 
-        'data_pars': { 
-            "batch_size":150,   ### Mini Batch from data
-            # Needed by getdataset
-            "clean" : False,
-            "data_path":   path_pkg + '/data_simple/Wine/gaussian_m0s5_categorical_alpha0.0/5pc_rows_20pc_cols_run_1/',
+    #     },
+    #     'data_pars': {
+    #         'data_pars' :{
+    #             # Raw dataset, pre preprocessing
+    #             "dataset_path" : path_pkg + "/data_simple/Adult/",
+    #             "batch_size":150,   ### Mini Batch from data
+    #             # Needed by getdataset
+    #             "clean" : False,
+    #             "data_path":   path_pkg + '/data_simple/Adult/gaussian_m0s5_categorical_alpha0.0/5pc_rows_20pc_cols_run_1/',
+    #         }
 
-        },
+    #     },
         
-        'global_pars' :{
-            "data_path":   path_pkg + '/data_simple/Wine/gaussian_m0s5_categorical_alpha0.0/5pc_rows_20pc_cols_run_1/',
-            "output_path": path_pkg + '/outputs_experiments_i/Wine/gaussian_m0s5_categorical_alpha0.0/5pc_rows_20pc_cols_run_1/RVAE_CVI',
+    #     'global_pars' :{
+    #         "data_path":   path_pkg + '/data_simple/Adult/gaussian_m0s5_categorical_alpha0.0/5pc_rows_20pc_cols_run_1/',
+    #         "output_path": path_pkg + '/outputs_experiments_i/Adult/gaussian_m0s5_categorical_alpha0.0/5pc_rows_20pc_cols_run_1/RVAE_CVI',
 
-        }
-    }
-    test_helper(m)
-
-
-
-
-def test2(nrows=1000):
-    """
-    """
-    global model, session
-    m = {'model_pars': {
-            # Specify the model
-            'model_class':  "torch_tabular.py::RVAE",
-            'model_pars' : {
-                "activation":'relu', "outlier_model":'RVAE', "AVI":False, "alpha_prior":0.95,
+    #     }
+        
+    # }
+    #### Matching Big dict  ##################################################
+    def post_process_fun(y): return int(y)
+    def pre_process_fun(y):  return int(y)
+    m = {
+    'model_pars': {
+         'model_class' :  "torch_tabular.py::RVAE"
+         ,'model_pars' : { 
+             "activation":'relu', "outlier_model":'RVAE', "AVI":False, "alpha_prior":0.95,
                 "embedding_size":50, "is_one_hot":False, "latent_dim":20, "layer_size":400,
-            }
-        },
+          }
+        , 'post_process_fun' : post_process_fun   ### After prediction  ##########################################
+        , 'pre_process_pars' : {'y_norm_fun' :  pre_process_fun ,  ### Before training  ##########################
+            ### Pipeline for data processing ##############################
+            'pipe_list': [  #### coly target prorcessing
+            {'uri': 'source/prepro.py::pd_coly',                 'pars': {}, 'cols_family': 'coly',       'cols_out': 'coly',           'type': 'coly'         },
+            {'uri': 'source/prepro.py::pd_colnum_bin',           'pars': {}, 'cols_family': 'colnum',     'cols_out': 'colnum_bin',     'type': ''             },
+            {'uri': 'source/prepro.py::pd_colcat_bin',           'pars': {}, 'cols_family': 'colcat',     'cols_out': 'colcat_bin',     'type': ''             },
 
-        'compute_pars': {
-            'compute_extra' :{
+            ],
+            }
+    },
+
+    'compute_pars': { 
+        'compute_extra' :{
                 "log_interval":50,
                 "save_on":True,
                 "verbose_metrics_epoch":True,
@@ -543,28 +477,43 @@ def test2(nrows=1000):
             },
 
             'metric_list': ['accuracy_score', 'average_precision_score'],
+    },
 
+    'data_pars': { 'n_sample' : nrows,
+  
+        'download_pars'   : None,
+        # 'cols_input_type' : cols_input_type_1,
+        ### family of columns for MODEL  ##################
+         'cols_model_group': [ 'colnum_bin',   'colcat_bin', ]
+
+        ### Filter data rows   ###########################
+        ,'filter_pars': { 'ymax' : 2 ,'ymin' : -1 },
+
+        ### Added continuous & sparse features groups ###
+        'cols_model_type2': {
         },
-        'data_pars': {
-            'data_pars' :{
+
+        'data_pars' :{
                 # Raw dataset, pre preprocessing
                 "dataset_path" : path_pkg + "/data_simple/Adult/",
                 "batch_size":150,   ### Mini Batch from data
                 # Needed by getdataset
                 "clean" : False,
                 "data_path":   path_pkg + '/data_simple/Adult/gaussian_m0s5_categorical_alpha0.0/5pc_rows_20pc_cols_run_1/',
-            }
+        }
+        ####### ACTUAL data Values #############################################################
+        ,'train':   {}
+        ,'val':     {}
+        ,'predict': {}
 
         },
-        
+
         'global_pars' :{
-            "data_path":   path_pkg + '/data_simple/Adult/gaussian_m0s5_categorical_alpha0.0/5pc_rows_20pc_cols_run_1/',
+            # "data_path":   path_pkg + '/data_simple/Adult/gaussian_m0s5_categorical_alpha0.0/5pc_rows_20pc_cols_run_1/',
             "output_path": path_pkg + '/outputs_experiments_i/Adult/gaussian_m0s5_categorical_alpha0.0/5pc_rows_20pc_cols_run_1/RVAE_CVI',
 
         }
-        
     }
-
     #### Preprocess the dataset
     dataset_path = m['data_pars']['data_pars']['dataset_path']
     print("\n\nDATASET : ", dataset_path)
@@ -1068,105 +1017,221 @@ class RVAE(nn.Module):
 
 
 
-def test_rvae():
-    global model
-    args={
-        "AVI":False,
-        "activation":'relu',
-        "alpha_prior":0.95,
-        "batch_size":150,
-        "cuda_on":False,
-        "data_path":'../data_simple/Wine/gaussian_m0s5_categorical_alpha0.0/5pc_rows_20pc_cols_run_1/',
-        "embedding_size":50,
-        "inference_type":'vae',
-        "is_one_hot":False,
-        "l2_reg":0.0,
-        "latent_dim":20,
-        "layer_size":400,
-        "load_model":False,
-        "load_model_path":None,
-        "log_interval":50,
-        "lr":0.001,
-        "number_epochs":2,
-        "outlier_model":'RVAE',
-        "output_path":'outputs_experiments_i/Wine/gaussian_m0s5_categorical_alpha0.0/5pc_rows_20pc_cols_run_1/RVAE_CVI',
-        "save_on":True,
-        "seqvae_bprop":False,
-        "seqvae_steps":4,
-        "seqvae_two_stage":False,
-        "std_gauss_nll":2.0,
-        "steps_2stage":4,
-        "verbose_metrics_epoch":True,
-        "verbose_metrics_feature_epoch":False
-    }
-    args = namedtuple("args", args.keys())(*args.values())
-    m = {'model_pars': {
-            # Specify the model
-            'model_class':  "torch_tabular.py::RVAE",
-            # "load_model":False,
-            # "load_model_path":None,
-            "activation":'relu',
-            "outlier_model":'RVAE',
-            "AVI":False,
-            "alpha_prior":0.95,
-            "embedding_size":50,
-            "is_one_hot":False,
-            "latent_dim":20,
-            "layer_size":400,
+# def test_rvae():
+#     global model
+#     args={
+#         "AVI":False,
+#         "activation":'relu',
+#         "alpha_prior":0.95,
+#         "batch_size":150,
+#         "cuda_on":False,
+#         "data_path":'../data_simple/Wine/gaussian_m0s5_categorical_alpha0.0/5pc_rows_20pc_cols_run_1/',
+#         "embedding_size":50,
+#         "inference_type":'vae',
+#         "is_one_hot":False,
+#         "l2_reg":0.0,
+#         "latent_dim":20,
+#         "layer_size":400,
+#         "load_model":False,
+#         "load_model_path":None,
+#         "log_interval":50,
+#         "lr":0.001,
+#         "number_epochs":2,
+#         "outlier_model":'RVAE',
+#         "output_path":'outputs_experiments_i/Wine/gaussian_m0s5_categorical_alpha0.0/5pc_rows_20pc_cols_run_1/RVAE_CVI',
+#         "save_on":True,
+#         "seqvae_bprop":False,
+#         "seqvae_steps":4,
+#         "seqvae_two_stage":False,
+#         "std_gauss_nll":2.0,
+#         "steps_2stage":4,
+#         "verbose_metrics_epoch":True,
+#         "verbose_metrics_feature_epoch":False
+#     }
+#     args = namedtuple("args", args.keys())(*args.values())
+#     m = {'model_pars': {
+#             # Specify the model
+#             'model_class':  "torch_tabular.py::RVAE",
+#             # "load_model":False,
+#             # "load_model_path":None,
+#             "activation":'relu',
+#             "outlier_model":'RVAE',
+#             "AVI":False,
+#             "alpha_prior":0.95,
+#             "embedding_size":50,
+#             "is_one_hot":False,
+#             "latent_dim":20,
+#             "layer_size":400,
           
 
-        },
+#         },
 
-        'compute_pars': {
-            "cuda_on":False,
-            "number_epochs":2,
-            "l2_reg":0.0,
-            "lr":0.001,
-            "seqvae_bprop":False,
-            "seqvae_steps":4,
-            "seqvae_two_stage":False,
-            "std_gauss_nll":2.0,
-            "steps_2stage":4,
-            "inference_type":'vae',
-            'metric_list': [
-                'accuracy_score',
-                'average_precision_score'
-            ]
-        },
+#         'compute_pars': {
+#             "cuda_on":False,
+#             "number_epochs":2,
+#             "l2_reg":0.0,
+#             "lr":0.001,
+#             "seqvae_bprop":False,
+#             "seqvae_steps":4,
+#             "seqvae_two_stage":False,
+#             "std_gauss_nll":2.0,
+#             "steps_2stage":4,
+#             "inference_type":'vae',
+#             'metric_list': [
+#                 'accuracy_score',
+#                 'average_precision_score'
+#             ]
+#         },
 
-        'data_pars': {
-            "data_path":'./data_simple/Wine/gaussian_m0s5_categorical_alpha0.0/5pc_rows_20pc_cols_run_1/',
-            "output_path":'./outputs_experiments_i/Wine/gaussian_m0s5_categorical_alpha0.0/5pc_rows_20pc_cols_run_1/RVAE_CVI',
-            "batch_size":150,
-        },
-        "log_interval":50,
-        "save_on":True,
-        "verbose_metrics_epoch":True,
-        "verbose_metrics_feature_epoch":False
-    }
-    model_pars = namedtuple("model_pars", m['model_pars'].keys())(*m['model_pars'].values())
-    compute_pars = namedtuple("compute_pars", m['compute_pars'].keys())(*m['compute_pars'].values())
-    data_pars = namedtuple("data_pars", m['data_pars'].keys())(*m['data_pars'].values())
+#         'data_pars': {
+#             "data_path":'./data_simple/Wine/gaussian_m0s5_categorical_alpha0.0/5pc_rows_20pc_cols_run_1/',
+#             "output_path":'./outputs_experiments_i/Wine/gaussian_m0s5_categorical_alpha0.0/5pc_rows_20pc_cols_run_1/RVAE_CVI',
+#             "batch_size":150,
+#         },
+#         "log_interval":50,
+#         "save_on":True,
+#         "verbose_metrics_epoch":True,
+#         "verbose_metrics_feature_epoch":False
+#     }
+#     model_pars = namedtuple("model_pars", m['model_pars'].keys())(*m['model_pars'].values())
+#     compute_pars = namedtuple("compute_pars", m['compute_pars'].keys())(*m['compute_pars'].values())
+#     data_pars = namedtuple("data_pars", m['data_pars'].keys())(*m['data_pars'].values())
 
-    m["model_pars"] = model_pars
-    m["compute_pars"] = compute_pars
-    m["data_pars"] = data_pars
+#     m["model_pars"] = model_pars
+#     m["compute_pars"] = compute_pars
+#     m["data_pars"] = data_pars
 
-    m = namedtuple("m", m.keys())(*m.values())
+#     m = namedtuple("m", m.keys())(*m.values())
 
-    log(m)
-    model = RVAE(
-        # data_path=m.data_path,
-        args=m
-    )
-    log("################################## Training ##################################")
-    model.fit()
-    log("################################## Save Model ##################################")
-    model.save()
+#     log(m)
+#     model = RVAE(
+#         # data_path=m.data_path,
+#         args=m
+#     )
+#     log("################################## Training ##################################")
+#     model.fit()
+#     log("################################## Save Model ##################################")
+#     model.save()
+
+
+# def test(nrows=1000):
+#     """nrows : take first nrows from dataset
+#     """
+#     global model, session
+#     m = {'model_pars': {
+#             # Specify the model
+#             'model_class':  "torch_tabular.py::RVAE",
+#             'model_pars' : {"activation":'relu', "outlier_model":'RVAE', "AVI":False, "alpha_prior":0.95, 
+#                             "embedding_size":50, "is_one_hot":False, "latent_dim":20, "layer_size":400,
+#             }          
+#         },
+
+#         'compute_pars': {
+#             'compute_extra' :{
+#                 "log_interval":50,
+#                 "save_on":True,
+#                 "verbose_metrics_epoch":True,
+#                 "verbose_metrics_feature_epoch":False
+#             },
+
+#             'compute_pars' :{
+#                 "cuda_on":False, "number_epochs":1, "l2_reg":0.0, "lr":0.001, "seqvae_bprop":False, "seqvae_steps":4,
+#                 "seqvae_two_stage":False, "std_gauss_nll":2.0, "steps_2stage":4, "inference_type":'vae',
+#                 "batch_size":150,
+#             },
+
+#             'metric_list': ['accuracy_score', 'average_precision_score' ],            
+#         },
+
+#         'data_pars': { 
+#             "batch_size":150,   ### Mini Batch from data
+#             # Needed by getdataset
+#             "clean" : False,
+#             "data_path":   path_pkg + '/data_simple/Wine/gaussian_m0s5_categorical_alpha0.0/5pc_rows_20pc_cols_run_1/',
+
+#         },
+        
+#         'global_pars' :{
+#             "data_path":   path_pkg + '/data_simple/Wine/gaussian_m0s5_categorical_alpha0.0/5pc_rows_20pc_cols_run_1/',
+#             "output_path": path_pkg + '/outputs_experiments_i/Wine/gaussian_m0s5_categorical_alpha0.0/5pc_rows_20pc_cols_run_1/RVAE_CVI',
+
+#         }
+#     }
+#     test_helper(m)
+
+
+
+# cols_ref_formodel = ['cols_single_group']
+# cols_ref_formodel = ['colcontinuous', 'colsparse']
+# def get_dataset_tuple(Xtrain, cols_type_received, cols_ref):
+#     """  Split into Tuples to feed  Xyuple = (df1, df2, df3) OR single dataframe
+#     :param Xtrain:
+#     :param cols_type_received:
+#     :param cols_ref:
+#     :return:
+#     """
+#     if len(cols_ref) <= 1 :
+#         return Xtrain
+
+#     Xtuple_train = []
+#     # cols_ref is the reference for types of cols groups (sparse/continuous)
+#     # This will result in deviding the dataset into many groups of features
+#     for cols_groupname in cols_ref :
+#         # Assert the group name is in the cols reference
+#         assert cols_groupname in cols_type_received, "Error missing colgroup in config data_pars[cols_model_type] "
+#         cols_i = cols_type_received[cols_groupname]
+#         # Add the columns of this group to the list
+#         Xtuple_train.append( Xtrain[cols_i] )
+
+#     if len(cols_ref) == 1 :
+#         return Xtuple_train[0]  ### No tuple
+#     else :
+#         return Xtuple_train
+
+
+# def get_dataset2(data_pars=None, task_type="train", **kw):
+#     """  Return tuple of dataframes
+#     """
+#     # log(data_pars)
+#     data_type = data_pars.get('type', 'ram')
+#     cols_ref  = cols_ref_formodel
+
+#     if data_type == "ram":
+#         # cols_ref_formodel = ['cols_cross_input', 'cols_deep_input', 'cols_deep_input' ]
+#         ### dict  colgroup ---> list of colname
+
+#         cols_type_received     = data_pars.get('cols_model_type2', {} )  ##3 Sparse, Continuous
+
+#         if task_type == "predict":
+#             d = data_pars[task_type]
+#             Xtrain       = d["X"]
+#             Xtuple_train = get_dataset_tuple(Xtrain, cols_type_received, cols_ref)
+#             return Xtuple_train
+
+#         if task_type == "eval":
+#             d = data_pars[task_type]
+#             Xtrain, ytrain  = d["X"], d["y"]
+#             Xtuple_train    = get_dataset_tuple(Xtrain, cols_type_received, cols_ref)
+#             return Xtuple_train, ytrain
+
+#         if task_type == "train":
+#             d = data_pars[task_type]
+#             Xtrain, ytrain, Xtest, ytest  = d["Xtrain"], d["ytrain"], d["Xtest"], d["ytest"]
+
+#             ### dict  colgroup ---> list of df
+#             Xtuple_train = get_dataset_tuple(Xtrain, cols_type_received, cols_ref)
+#             Xtuple_test  = get_dataset_tuple(Xtest, cols_type_received, cols_ref)
+#             log2("Xtuple_train", Xtuple_train)
+
+#             return Xtuple_train, ytrain, Xtuple_test, ytest
+
+
+#     elif data_type == "file":
+#         raise Exception(f' {data_type} data_type Not implemented ')
+
+#     raise Exception(f' Requires  Xtrain", "Xtest", "ytrain", "ytest" ')
 
 
 if __name__ == "__main__":
     import fire
     fire.Fire()
-
-

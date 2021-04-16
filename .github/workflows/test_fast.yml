@@ -89,15 +89,15 @@ jobs:
     - name: python titanic_classifier.py  train
       # continue-on-error: true
       run:  |
-            python titanic_classifier.py  train    --nsample 1000     
-            python titanic_classifier.py  predict  --nsample 1000   
+            python titanic_classifier.py  train    --nsample 1000
+            python titanic_classifier.py  predict  --nsample 1000
 
          
 
     - name: python example/classifier/classifier_multi.py  train    --nsample 10000   
       # continue-on-error: true
       run:  |
-            python example/classifier/classifier_multi.py  train    --nsample 10000   
+            python example/classifier/classifier_multi.py  train    --nsample 10000
             echo ""    
 
  
