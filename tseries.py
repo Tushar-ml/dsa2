@@ -82,11 +82,11 @@ def config1() :
        used for tseries_demand classification task
     """
     data_name    = "tseries_demand"         ### in data/input/
-    model_class  = "LGBMRegressor"  ### ACTUAL Class name for model_sklearn.py
+    model_class  = "source/models/model_tseries.py:LGBMRegressor"  ### ACTUAL Class name for model_sklearn.py
     n_sample     = 100000
 
     def post_process_fun(y):   ### After prediction is done
-        # ynew = np.exp(y) - 1.0 
+        # ynew = np.exp(y) - 1.0
         ynew = float(y)
         return  ynew
 
@@ -135,7 +135,7 @@ def config1() :
 
 
           ### Model Input :  Merge family of columns   #############################################
-          "cols_model_group": [                                
+          "cols_model_group": [
                                ### cols_out of  pd_dsa2_custom
                                "tseries_feat"
                               ]
@@ -144,7 +144,7 @@ def config1() :
      ,'cols_model_type': {
          'My123_continuous' : [ 'tseries_feat',   ],
          'my_sparse'        : [ 'colcat',  ],
-      }   
+      }
 
           ### Filter data rows   ##################################################################
          ,"filter_pars": { "ymax" : 999999999 ,"ymin" : -1 }

@@ -8,16 +8,18 @@ Template for tseries type of model:
 import os, pandas as pd, numpy as np, scipy as sci, sklearn
 
 ####################################################################################################
-from utilmy import global_verbosity, os_makedirs
-verbosity = global_verbosity(__file__, "/../../config.json" ,default= 5)
-
+from utilmy import global_verbosity, os_makedirs, pd_read_file
+verbosity = global_verbosity(__file__,"/../../config.json", 3 )
 
 def log(*s):
     print(*s, flush=True)
 
+def log2(*s):
+    if verbosity >= 2 : print(*s, flush=True)
 
 def log3(*s):
-    print(*s, flush=True)
+    if verbosity >= 3 : print(*s, flush=True)
+
 
 ####################################################################################################
 global model, session
@@ -136,7 +138,6 @@ def load_info(path=""):
 
 
 ####################################################################################################
-############ Do not change #########################################################################
 def get_dataset(data_pars=None, task_type="train", **kw):
     """
       "ram"  :
@@ -170,21 +171,163 @@ def get_dataset(data_pars=None, task_type="train", **kw):
 
 
 
-
 ####################################################################################################################
 def test_dataset_tseries(nrows=10000):
-
+    url_csv = "demand tseries"
     df = pd.read_csv(url_csv)
-    coly=None, 
-    coldate=None, 
+    coly=None,
+    coldate=None,
     colcat=None
     df = df.groupby([coldate])[coly].sum().reset_index()
     df = df.set_index(coldate)  #### Date as
     df.index.freq="D"
-    df[coldate] = pd.to_datetime(df[coldate])    
+    df[coldate] = pd.to_datetime(df[coldate])
     return df, coly, coldate, colcat
 
 
+
+def test():
+    global model, session
+    df, coly, coldate, colcat = test_dataset_tseries()
+
+    #### Matching Big dict  ##################################################
+    X = df
+    y = df[coly].astype('uint8')
+    log('y', np.sum(y[y==1]) )
+
+    # Split the df into train/test subsets
+    X_train_full, X_test, y_train_full, y_test = time_train_test_split(X, y, test_size=0.05, random_state=2021, stratify=y)
+    X_train, X_valid, y_train, y_valid         = time_train_test_split(X_train_full, y_train_full, random_state=2021, stratify=y_train_full)
+
+
+
+    cols_input_type_1 = {
+         "coly"   :   "sales"
+        ,"colid"  :   "id_date"   ### used for JOIN tables, duplicate date
+        ,"colcat" :   ["store", "item" ]
+        ,"colnum" :   []
+        ,"coltext" :  []
+        ,"coldate" :  []
+
+        ### Specific for time sereis
+        ,"col_tseries" :  ['date', 'store', 'item', 'sales']
+
+        ,"colcross" : [ ]
+    }
+
+    data_name    = "tseries_demand"         ### in data/input/
+    model_class  = "source/models/model_tseries.py:LGBMRegressor"  ### ACTUAL Class name for model_sklearn.py
+    n_sample     = 100000
+
+    def post_process_fun(y):   ### After prediction is done
+        # ynew = np.exp(y) - 1.0
+        ynew = float(y)
+        return  ynew
+
+    def pre_process_fun(y):    ### Before the prediction is done
+        # ynew = np.log(y+1)
+        ynew = float(y)
+        return  ynew
+
+
+    model_dict = {"model_pars": {
+        ### LightGBM API model   #######################################
+         "model_class": model_class
+        ,"model_pars" : {"objective": "huber",    ### Regression Type Loss
+                           "n_estimators": 100,
+                           "learning_rate":0.001,
+                           "boosting_type":"gbdt",     ### Model hyperparameters
+                           "early_stopping_rounds": 5
+
+                        }
+
+        , "post_process_fun" : post_process_fun   ### After prediction  #######
+        , "pre_process_pars" : {"y_norm_fun" :  pre_process_fun ,  ### Before training  ##########################
+
+
+        ### Pipeline for data processing ##############################
+        "pipe_list": [
+        #### Example of Custom processor
+        {"uri":  "::pd_dsa2_custom",
+            "pars"        : {'coldate': 'date'},
+            "cols_family" : "col_tseries",
+            "cols_out"    : "tseries_feat",  "type": "" },
+
+        ],
+               }
+        },
+
+      "compute_pars": { "metric_list": ['root_mean_squared_error', 'mean_absolute_error',
+                                       'explained_variance_score', 'r2_score', 'median_absolute_error']
+                      },
+
+      "data_pars": { "n_sample" : n_sample,
+          "download_pars" : None,
+
+          ### Raw data:  column input ##############################################################
+          "cols_input_type" : cols_input_type_1,
+
+
+          ### Model Input :  Merge family of columns   #############################################
+          "cols_model_group": [
+                               ### cols_out of  pd_dsa2_custom
+                               "tseries_feat"
+                              ]
+
+      ###################################################
+        ,'train': {'Xtrain': X_train, 'ytrain': y_train,
+                   'Xtest': X_valid,  'ytest':  y_valid},
+
+        'eval': {'X': X_valid,  'y': y_valid},
+        'predict': {'X': X_valid}
+
+
+      #### Model Input : Separate Category Sparse from Continuous : Aribitrary name is OK (!)
+     ,'cols_model_type2': {
+         'My123_continuous' : [ 'tseries_feat',   ],
+         'my_sparse'        : [ 'colcat',  ],
+      }
+
+          ### Filter data rows   ##################################################################
+         ,"filter_pars": { "ymax" : 999999999 ,"ymin" : -1 }
+
+         }
+      }
+
+
+
+    ll = [
+        ('model_tseries.py::LightGBMregressor',
+            {
+            }
+        ),
+
+    ]
+    for cfg in ll:
+        log(f"******************************************** {cfg[0]} ********************************************")
+        reset()
+        # Set the ModelConfig
+        m['model_pars']['model_class'] = cfg[0]
+        m['model_pars']['model_pars']  = {**m['model_pars']['model_pars'] , **cfg[1] }
+
+        log('Setup model..')
+        model = Model(model_pars=m['model_pars'], data_pars=m['data_pars'], compute_pars= m['compute_pars'] )
+
+        log('\n\nTraining the model..')
+        fit(data_pars=m['data_pars'], compute_pars= m['compute_pars'], out_pars=None)
+        log('Training completed!\n\n')
+
+        log('Predict data..')
+        ypred, ypred_proba = predict(Xpred=None, data_pars=m['data_pars'], compute_pars=m['compute_pars'])
+        log(f'Top 5 y_pred: {np.squeeze(ypred)[:5]}')
+
+        log('Model architecture:')
+        log(model.model)
+        reset()
+
+
+
+####################################################################################################################
 def LighGBM_forecaster(lightgbm_pars= {'objective':'quantile', 'alpha': 0.5},
                        forecaster_pars = {'window_length': 4}):
     """
@@ -334,116 +477,13 @@ def test2(nrows=1000):
     # forecasts.append(store1_agg_monthly)
 
 
-    log('Predict data..')
-    log(f'Top 5 y_pred: {forecasts[:5]}')
-    reset()
-
-
-    num_classes = len(set(y_train_full[coly].values.ravel()))
-    log(X_train)
-
-
-    cols_input_type_1 = []
-    n_sample = 100
-    def post_process_fun(y):
-        return int(y)
-
-    def pre_process_fun(y):
-        return int(y)
-
-
-    m = {'model_pars': {
-        ### LightGBM API model   #######################################
-        # Specify the ModelConfig for pytorch_tabular
-        'model_class':  "torch_tabular.py::CategoryEmbeddingModelConfig"
-
-        # Type of target prediction, evaluation metrics
-        ,'model_pars' : {
-                        # 'task': "classification",
-                        # 'metrics' : ["f1","accuracy"],
-                        # 'metrics_params' : [{"num_classes":num_classes},{}]
-                        }
-
-        , 'post_process_fun' : post_process_fun   ### After prediction  ##########################################
-        , 'pre_process_pars' : {'y_norm_fun' :  pre_process_fun ,  ### Before training  ##########################
-
-        ### Pipeline for data processing ##############################
-        'pipe_list': [  #### coly target prorcessing
-        {'uri': 'source/prepro.py::pd_coly',                 'pars': {}, 'cols_family': 'coly',       'cols_out': 'coly',           'type': 'coly'         },
-
-        ],
-            }
-        },
-
-    'compute_pars': { 'metric_list': ['accuracy_score','average_precision_score']
-                    },
-
-    'data_pars': { 'n_sample' : n_sample,
-        'download_pars' : None,
-        'cols_input_type' : cols_input_type_1,
-        ### family of columns for MODEL  #########################################################
-        'cols_model_group': [ 'colnum_bin',   'colcat_bin',
-                            ]
-
-        ,'cols_model_group_custom' :  { 'colnum' : colnum,
-                                        'colcat' : colcat,
-                                        'coly' : coly
-                            }
-        ###################################################
-        ,'train': {'Xtrain': X_train, 'ytrain': y_train,
-                   'Xtest': X_valid,  'ytest':  y_valid},
-                'eval': {'X': X_valid,  'y': y_valid},
-                'predict': {'X': X_valid}
-
-        ### Filter data rows   ##################################################################
-        ,'filter_pars': { 'ymax' : 2 ,'ymin' : -1 },
-
-
-        ### Added continuous & sparse features groups ###
-        'cols_model_type2': {
-            'colcontinuous':   colnum ,
-            'colsparse' : colcat,
-        },
-        }
-    }
-
-    ##### Running loop
-    """
-
-    """
-    ll = [
-        ('model_tseries.py::LightGBMregressor',
-            {   'task': "classification",
-                'metrics' : ["f1","accuracy"],
-                'metrics_params' : [{"num_classes":num_classes},{}]
-            }
-        ),
-
-    ]
-    for cfg in ll:
-        log(f"******************************************** {cfg[0]} ********************************************")
-        reset()
-        # Set the ModelConfig
-        m['model_pars']['model_class'] = cfg[0]
-        m['model_pars']['model_pars']  = {**m['model_pars']['model_pars'] , **cfg[1] }
-
-        log('Setup model..')
-        model = Model(model_pars=m['model_pars'], data_pars=m['data_pars'], compute_pars= m['compute_pars'] )
-
-        log('\n\nTraining the model..')
-        fit(data_pars=m['data_pars'], compute_pars= m['compute_pars'], out_pars=None)
-        log('Training completed!\n\n')
-
-        log('Predict data..')
-        ypred, ypred_proba = predict(Xpred=None, data_pars=m['data_pars'], compute_pars=m['compute_pars'])
-        log(f'Top 5 y_pred: {np.squeeze(ypred)[:5]}')
-
-        log('Model architecture:')
-        log(model.model)
-        reset()
 
 
 if __name__ == "__main__":
-    # import fire
-    # fire.Fire()
-    test0(nrows=1000, file_path="train.csv", coly="sales", coldate="date", colcat=None)
+    import fire
+    fire.Fire()
+
+    # test0(nrows=1000, file_path="train.csv", coly="sales", coldate="date", colcat=None)
+
+
+

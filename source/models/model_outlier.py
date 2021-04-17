@@ -2,13 +2,12 @@
 # -*- coding: utf-8 -*-
 """
 python model_fraud.py
-
 """
 import os, sys,copy, pathlib, pprint, json, pandas as pd, numpy as np, scipy as sci, sklearn
 
 ####################################################################################################
-from utilmy import global_verbosity, os_makedirs
-verbosity = global_verbosity(__file__, "/../../config.json" ,default= 5)
+from utilmy import global_verbosity, os_makedirs, pd_read_file
+verbosity = global_verbosity(__file__,"/../../config.json", 3 )
 
 def log(*s):
     print(*s, flush=True)
@@ -31,7 +30,7 @@ def reset():
     model, session = None, None
 
 
-########Custom Model ###############################################################################
+########Custom Model #########################################################################################
 from sklearn.linear_model import *
 from sklearn.svm import *
 from sklearn.ensemble import *
@@ -79,8 +78,8 @@ class Model(object):
             self.model = None
         else:
             ##
-            self.model_pars['model_path']  = self.model_pars['model_class'].split(":")[0] 
-            self.model_pars['model_class'] = self.model_pars['model_class'].split(":")[-1] 
+            self.model_pars['model_path']  = self.model_pars['model_class'].split(":")[0]
+            self.model_pars['model_class'] = self.model_pars['model_class'].split(":")[-1]
 
             model_class = globals()[self.model_pars['model_class']]  ## globals() Buggy when doing loop
             self.model  = model_class( **self.model_pars['model_pars'])
@@ -92,7 +91,7 @@ def fit(data_pars=None, compute_pars=None, out_pars=None, **kw):
     """
     global model, session
     session = None  # Session type for compute
-    Xtrain, ytrain, Xtest, ytest = get_dataset(data_pars, task_type="train")
+    Xtrain, ytrain, Xtest, ytest = get_dataset2(data_pars, task_type="train")
     log2(Xtrain.shape, model.model)
 
     if  model.model_pars['model_class'] in [ 'HBOS', 'ABOD'  ]:  ## Numba issues
@@ -119,8 +118,8 @@ def predict(Xpred=None, data_pars={}, compute_pars={}, out_pars={}, **kw):
 
     ypred = model.model.predict(Xpred)
     #ypred = post_process_fun(ypred)
-    
-    ypred_proba = None  ### No proba    
+
+    ypred_proba = None  ### No proba
     if compute_pars.get("probability", False):
           if  model.model_pars['model_class'] in [  ]:
              ypred_proba = model.model.decision_scores  (Xpred)
@@ -129,9 +128,8 @@ def predict(Xpred=None, data_pars={}, compute_pars={}, out_pars={}, **kw):
                bug in site-packages\pyod\models/base.py
                Correct code :
                      self._classes = max(2, len(np.unique(y)) )
-
              """
-             ypred_proba = model.model.predict_proba(Xpred) 
+             ypred_proba = model.model.predict_proba(Xpred)
     return ypred, ypred_proba
 
 
@@ -144,12 +142,12 @@ def save(path=None, info=None):
 
     try :
        pickle.dump(model, open(f"{path}/model.pkl", mode='wb'))  # , protocol=pickle.HIGHEST_PROTOCOL )
-    
+
     except Exception as e :
        mkeras = model.model.combine_model   ## Keras version
        mkeras.save( f"{path}/model_keras.h5" )
        model.model = None
-       pickle.dump(model, open(f"{path}/model.pkl", mode='wb'))  # , protocol=pickle.HIGHEST_PROTOCOL )       
+       pickle.dump(model, open(f"{path}/model.pkl", mode='wb'))  # , protocol=pickle.HIGHEST_PROTOCOL )
        model.model = mkeras
        log( f"{path}/model_keras.h5"  )
 
@@ -169,9 +167,9 @@ def load_model(path=""):
         model.compute_pars = model0.compute_pars
 
         if model.model_pars['model_class'] in  [ 'SO_GAAL', 'VAE'] :
-           import keras 
-           model.model =  keras.models.load_model(f"{path}/model_keras.h5") 
-        else :    
+           import keras
+           model.model =  keras.models.load_model(f"{path}/model_keras.h5")
+        else :
            model.model = model0.model
 
         session = None
@@ -197,23 +195,23 @@ THISMODEL_COLGROUPS = []
 def get_dataset_split_for_model_pandastuple(Xtrain, ytrain=None, data_pars=None, ):
     """  Split data for moel input/
     Xtrain  ---> Split INTO  tuple of data  Xtuple= (df1, df2, df3) to fit model input.
-
     :param Xtrain:
     :param coldataloader_received:
     :param colmodel_ref:
     :return:
     """
     from utilmy import pd_read_file
-    coldataloader_received,  = data_pars.get('cols_model_type2', {})
-    colmodel_ref             = THISMODEL_COLGROUPS
+    coldataloader_received  = data_pars.get('cols_model_type2', {})   ### column defined in Data
+    colmodel_ref            = THISMODEL_COLGROUPS   ### Column defined here
 
     ### Into RAM
-    if isinstance(Xtrain, str) : Xtrain = pd_read_file(Xtrain, verbose=False)
-    if isinstance(ytrain, str) : ytrain = pd_read_file(ytrain, verbose=False)
+    if isinstance(Xtrain, str) : Xtrain = pd_read_file(Xtrain + "*", verbose=False)
+    if isinstance(ytrain, str) : ytrain = pd_read_file(ytrain + "*", verbose=False)
 
 
+    ##########################################################################
     if len(colmodel_ref) <= 1 :   ## No split
-        return Xtrain
+        return Xtrain, ytrain
 
     ### Split the pandas columns into different pieces  ######################
     Xtuple_train = []
@@ -225,19 +223,29 @@ def get_dataset_split_for_model_pandastuple(Xtrain, ytrain=None, data_pars=None,
     return Xtuple_train, ytrain
 
 
-def get_dataset_split_for_model(d, data_pars):
-     if 'Xtrain' in d and 'ytrain' in d and 'Xtest' in d  and 'ytest' in d:
-         Xtrain, ytrain = get_dataset_split_for_model_pandastuple(d['Xtrain'], d['ytrain'],  data_pars)
-         Xtest, ytest   = get_dataset_split_for_model_pandastuple(d['Xtest'], d['ytest'],    data_pars)
-         return Xtrain, ytrain, Xtest, ytest
+def get_dataset2(data_pars=None, task_type="train", **kw):
+    """
+       Raw Data (Path)   --->  Input Object (ie Pandas, ...) for Model training
+    """
+    log3('data_pars', data_pars)
+    data_type            = data_pars.get('type', 'pandas')
+    d                    = data_pars[task_type]
+    data_pars[task_type] = None    ### Save memory
 
-     if 'X' in d and 'y' in d :
-         Xtrain, ytrain = get_dataset_split_for_model_pandastuple(d['X'], d['y'],  data_pars)
-         return Xtrain, ytrain
+    if data_type in [ 'pandas', 'ram'] :
+        if task_type == "predict":
+            Xtrain, _ = get_dataset_split_for_model_pandastuple(d['X'], None,  data_pars)
+            return Xtrain
 
-     if 'X'  in d :
-         Xtrain, _ = get_dataset_split_for_model_pandastuple(d['X'], None,  data_pars)
-         return Xtrain, None
+        if task_type == "eval":
+            Xtrain, ytrain = get_dataset_split_for_model_pandastuple(d['X'], d['y'],  data_pars)
+            return Xtrain, ytrain
+
+        if task_type == "train":
+            Xtrain, ytrain = get_dataset_split_for_model_pandastuple(d['Xtrain'], d['ytrain'],  data_pars)
+            Xtest, ytest   = get_dataset_split_for_model_pandastuple(d['Xtest'],  d['ytest'],   data_pars)
+            return Xtrain, ytrain, Xtest, ytest
+
 
 
 def get_dataset(data_pars=None, task_type="train", **kw):
@@ -246,25 +254,26 @@ def get_dataset(data_pars=None, task_type="train", **kw):
       "file" :
     """
     # log(data_pars)
-    data_type = data_pars.get('type', 'ram')
+    data_type  = data_pars.get('type', 'ram')
+    cols_type  = data_pars.get('cols_model_type2', {})   #### Split input by Sparse, Continous
 
-    if task_type == "predict":
-        d = data_pars[task_type]
-        data_pars[task_type] = None    ### Save memory
-        d = get_dataset_split_for_model(d, data_pars )
-        return d["X"]
+    log3("Cols Type:", cols_type)
 
-    if task_type == "eval":
-        d = data_pars[task_type]
-        data_pars[task_type] = None
-        d = get_dataset_split_for_model(d, data_pars )
-        return d["X"], d["y"]
+    if data_type == "ram":
+        if task_type == "predict":
+            d = data_pars[task_type]
+            return d["X"]
 
-    if task_type == "train":
-        d = data_pars[task_type]
-        data_pars[task_type] = None
-        d = get_dataset_split_for_model(d, data_pars )
-        return d["Xtrain"], d["ytrain"], d["Xtest"], d["ytest"]
+        if task_type == "eval":
+            d = data_pars[task_type]
+            return d["X"], d["y"]
+
+        if task_type == "train":
+            d = data_pars[task_type]
+            return d["Xtrain"], d["ytrain"], d["Xtest"], d["ytest"]
+
+    elif data_type == "file":
+        raise Exception(f' {data_type} data_type Not implemented ')
 
 
 
@@ -277,11 +286,9 @@ if __name__ == "__main__":
 
 
 
+
 """
-
-
 class EnsembleDetector:
-
     def save(self, folder):
         #Saves the EnsembleDetector (as multiple files) in a given folder.'''
         # Save TF-based AutoEncoders in separate sub-directories (they don't pickle)
@@ -293,26 +300,19 @@ class EnsembleDetector:
                 model.model_ = None  # Remove non-pickleable TF models from self so we can pickle self
             if 'VAE' in str(type(model)):
                 raise Exception('VAE is not supported when saving the ensemble yet, since it uses a Lambda layer.')
-
         # Pickle the entire EnsembleDetector after the TF models are removed
         Path(folder).mkdir(parents=True, exist_ok=True)
         joblib.dump(self, Path(folder)/'ensemble_detector.joblib')
-
         # Add the TF model objects back into self
         for i in tf_models: self.models[i].model_ = tf_models[i]
-
     @staticmethod
     def load(folder):
         '''Loads the EnsembleDetector (from multiple files) in a given folder.'''
         # Unpickle the EnsembleDetector object
         ed = joblib.load(Path(folder)/'ensemble_detector.joblib')
-
         # Load TF-based AutoEncoders from separate sub-directories (they don't pickle)
         for i, model in enumerate(ed.models):
             if 'AutoEncoder' in str(type(model)):
                 model.model_ = keras.models.load_model(Path(folder)/str(i))
-
         return ed
 """
-
-

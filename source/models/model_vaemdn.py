@@ -720,69 +720,13 @@ def test():
     test_helper(model_pars, data_pars, compute_pars, Xpred)
 
 
-def test_dataset_classi_fake(nrows=500):
-    from sklearn import datasets as sklearn_datasets
-    ndim=11
-    coly   = 'y'
-    colnum = ["colnum_" +str(i) for i in range(0, ndim) ]
-    colcat = ['colcat_1']
-    X, y    = sklearn_datasets.make_classification(
-              n_samples=10000, n_features=ndim, n_classes=1, n_redundant = 0, n_informative=ndim )
-    df = pd.DataFrame(X,  columns= colnum)
-    for ci in colcat :
-      df[ci] = np.random.randint(0,1, len(df))
-    df[coly]   = y.reshape(-1, 1)
-    # log(df)
-    return df, colnum, colcat, coly
-
-
-def test_dataset_petfinder(nrows=1000):
-    from sklearn.preprocessing import LabelEncoder
-    # Dense features
-    colnum = ['PhotoAmt', 'Fee','Age' ]
-
-    # Sparse features
-    colcat = ['Type', 'Color1', 'Color2', 'Gender', 'MaturitySize','FurLength', 'Vaccinated', 'Sterilized',
-              'Health', 'Breed1' ]
-
-    colembed = ['Breed1']
-    # Target column
-    coly        = "y"
-
-    dataset_url = 'http://storage.googleapis.com/download.tensorflow.org/data/petfinder-mini.zip'
-    csv_file    = 'datasets/petfinder-mini/petfinder-mini.csv'
-    tf.keras.utils.get_file('petfinder_mini.zip', dataset_url,extract=True, cache_dir='.')
-
-    log3('Data Frame Loaded')
-    df      = pd.read_csv(csv_file)
-    df      = df.iloc[:nrows, :]
-    df['y'] = np.where(df['AdoptionSpeed']==4, 0, 1)
-    df      = df.drop(columns=['AdoptionSpeed', 'Description'])
-    df      = df.apply(LabelEncoder().fit_transform)
-    log3(df.dtypes)
-    return df, colnum, colcat, coly, colembed
-
-
-def train_test_split2(df, coly):
-    # log3(df.dtypes)
-    y = df[coly] ### If clonassificati
-    X = df.drop(coly,  axis=1)
-    log3('y', np.sum(y[y==1]) , X.head(3))
-    ######### Split the df into train/test subsets
-    X_train_full, X_test, y_train_full, y_test = train_test_split(X, y, test_size=0.05, random_state=2021)
-    X_train, X_valid, y_train, y_valid         = train_test_split(X_train_full, y_train_full, random_state=2021)
-
-    #####
-    # y = y.astype('uint8')
-    num_classes                                = len(set(y_train_full.values.ravel()))
-
-    return X,y, X_train, X_valid, y_train, y_valid, X_test,  y_test, num_classes
-
-
 
 def test2(n_sample          = 1000):
-    df, colnum, colcat, coly = test_dataset_classi_fake(nrows= n_sample)
-    X,y, X_train, X_valid, y_train, y_valid, X_test,  y_test, num_classes  = train_test_split2(df, coly)
+    from adatasets import test_dataset_classification_fake, pd_train_test_split2
+    df, d=     test_dataset_classification_fake(n_sample)
+    colnum, colcat, coly = d['colnum'], d['colcat'], d['coly']
+    # df, colnum, colcat, coly = test_dataset_classi_fake(nrows= n_sample)
+    X,y, X_train, X_valid, y_train, y_valid, X_test,  y_test, num_classes  = pd_train_test_split2(df, coly)
 
     #### Matching Big dict  ##################################################
     def post_process_fun(y): return int(y)
@@ -854,8 +798,14 @@ def test2(n_sample          = 1000):
 
 
 def test3(n_sample = 1000):
-    df, colnum, colcat, coly,colyembed = test_dataset_petfinder(nrows= n_sample)
-    X,y, X_train, X_valid, y_train, y_valid, X_test,  y_test, num_classes  = train_test_split2(df, coly)
+    from adatasets import test_dataset_classification_petfinder, pd_train_test_split2
+    df, d=     test_dataset_classification_petfinder(n_sample)
+    colnum, colcat, coly = d['colnum'], d['colcat'], d['coly']
+    # df, colnum, colcat, coly = test_dataset_classi_fake(nrows= n_sample)
+    X,y, X_train, X_valid, y_train, y_valid, X_test,  y_test, num_classes  = pd_train_test_split2(df, coly)
+
+    #df, colnum, colcat, coly,colyembed = test_dataset_petfinder(nrows= n_sample)
+    #X,y, X_train, X_valid, y_train, y_valid, X_test,  y_test, num_classes  = train_test_split2(df, coly)
 
     #### Matching Big dict  ##################################################
     def post_process_fun(y): return int(y)
@@ -983,6 +933,8 @@ def test_helper(model_pars, data_pars, compute_pars):
     log('Model architecture:')
     log(model.model.summary())
 
+
+
 def benchmark(config='', dmin=5, dmax=6):
     from pmlb import fetch_data, classification_dataset_names
     from sdv.evaluation import evaluate
@@ -1046,6 +998,81 @@ if __name__ == "__main__":
     # test()
     import fire
     fire.Fire()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"""
+def test_dataset_classi_fake(nrows=500):
+    from sklearn import datasets as sklearn_datasets
+    ndim=11
+    coly   = 'y'
+    colnum = ["colnum_" +str(i) for i in range(0, ndim) ]
+    colcat = ['colcat_1']
+    X, y    = sklearn_datasets.make_classification(
+              n_samples=10000, n_features=ndim, n_classes=1, n_redundant = 0, n_informative=ndim )
+    df = pd.DataFrame(X,  columns= colnum)
+    for ci in colcat :
+      df[ci] = np.random.randint(0,1, len(df))
+    df[coly]   = y.reshape(-1, 1)
+    # log(df)
+    return df, colnum, colcat, coly
+
+
+def test_dataset_petfinder(nrows=1000):
+    from sklearn.preprocessing import LabelEncoder
+    # Dense features
+    colnum = ['PhotoAmt', 'Fee','Age' ]
+
+    # Sparse features
+    colcat = ['Type', 'Color1', 'Color2', 'Gender', 'MaturitySize','FurLength', 'Vaccinated', 'Sterilized',
+              'Health', 'Breed1' ]
+
+    colembed = ['Breed1']
+    # Target column
+    coly        = "y"
+
+    dataset_url = 'http://storage.googleapis.com/download.tensorflow.org/data/petfinder-mini.zip'
+    csv_file    = 'datasets/petfinder-mini/petfinder-mini.csv'
+    tf.keras.utils.get_file('petfinder_mini.zip', dataset_url,extract=True, cache_dir='.')
+
+    log3('Data Frame Loaded')
+    df      = pd.read_csv(csv_file)
+    df      = df.iloc[:nrows, :]
+    df['y'] = np.where(df['AdoptionSpeed']==4, 0, 1)
+    df      = df.drop(columns=['AdoptionSpeed', 'Description'])
+    df      = df.apply(LabelEncoder().fit_transform)
+    log3(df.dtypes)
+    return df, colnum, colcat, coly, colembed
+
+
+def train_test_split2(df, coly):
+    # log3(df.dtypes)
+    y = df[coly] ### If clonassificati
+    X = df.drop(coly,  axis=1)
+    log3('y', np.sum(y[y==1]) , X.head(3))
+    ######### Split the df into train/test subsets
+    X_train_full, X_test, y_train_full, y_test = train_test_split(X, y, test_size=0.05, random_state=2021)
+    X_train, X_valid, y_train, y_valid         = train_test_split(X_train_full, y_train_full, random_state=2021)
+
+    #####
+    # y = y.astype('uint8')
+    num_classes                                = len(set(y_train_full.values.ravel()))
+
+    return X,y, X_train, X_valid, y_train, y_valid, X_test,  y_test, num_classes
+"""
 
 
 

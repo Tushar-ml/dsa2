@@ -112,21 +112,43 @@ jobs:
     #- name: run_all
     #  run: chmod -R 777 . && ztest/run_full.sh   # 2>&1 | tee   /home/runner/work/mlmodels/mlmodels_store/log_import/log_optim.py
 
+
+    - name: ipython example/test_keras_vaemdn.py  train
+      continue-on-error: true
+      run:  |
+            ipython example/test_keras_vaemdn.py  train
+
+
+    - name: python toutlier.py  train_test
+      # continue-on-error: true
+      run:  |
+            python toutlier.py  train_test
+
+
     - name: python  example/test_hyperopt.py  hyperparam  --ntrials 1  
       # continue-on-error: true
       run:  |
             python  example/test_hyperopt.py  hyperparam  --ntrials 1 
 
 
-    - name: python example/test_mkeras.py  train    --config config1  
+    - name: python example/test_mkeras.py  train    --config config1
       # continue-on-error: true
       run:  |
-            python example/test_mkeras.py  train    --config config1
-            python example/test_mkeras.py  predict    --config config1 
+            ipython example/test_mkeras.py  train
+            ipython example/test_mkeras.py  predict
+
+
+    - name: python example/test_mkeras_dense.py  train    --config config1
+      # continue-on-error: true
+      run:  |
+            ipython example/test_mkeras_dense.py  train
+            ipython example/test_mkeras_dense.py  predict
+
+
 
 
     - name: python   example/test_automl.py  train   
-      # continue-on-error: true
+      continue-on-error: true
       run:  |
             python   example/test_automl.py  train       --nsample 200
             python   example/test_automl.py  predict     --nsample 200 

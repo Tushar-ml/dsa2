@@ -54,29 +54,25 @@ def global_pars_update(model_dict,  data_name, config_name):
 
 
 
+
 ####################################################################################
 ##### Params########################################################################
 config_default   = "config1"    ### name of function which contains data configuration
 
 # data_name    = "titanic"     ### in data/input/
-cols_input_type_1 = {
-     "coly"   :   "Survived"
-    ,"colid"  :   "PassengerId"
-    ,"colcat" :   ["Sex", "Embarked", "Pclass", ]
-    ,"colnum" :   [ "Age","SibSp", "Parch","Fare"]
-    ,"coltext" :  []
-    ,"coldate" :  []
-    ,"colcross" : [  ]
-}
+coly   =   "Survived"
+colid  =   "PassengerId"
+colcat =   ["Sex", "Embarked", "Pclass", ]
+colnum =   [ "Age","SibSp", "Parch","Fare"]
 
 
 ####################################################################################
 def config1() :
     """
-       ONE SINGLE DICT Contains all needed informations for  used for titanic classification task
+        source/models/model_vaemdn.py  test2
     """
     data_name    = "titanic"         ### in data/input/
-    model_class  = "source/models/keras_widedeep.py::WideDeep_sparse"  ### ACTUAL Class name for
+    model_class  = "source/models/model_vaemdn.py.py::VAEMDN"  ### ACTUAL Class name for model
     n_sample     = 1000
 
     def post_process_fun(y):   ### After prediction is done
@@ -86,13 +82,20 @@ def config1() :
         return  int(y)
 
     model_dict = {"model_pars": {
-        ### LightGBM API model   #######################################
          "model_class": model_class
         ,"model_pars" : {
-
+            'original_dim':       len( colcat + colnum),
+            'class_num':             2,
+            'intermediate_dim':     64,
+            'intermediate_dim_2':   16,
+            'latent_dim' :           3,
+            'Lambda1'    :           1,
+            'batch_size' :         256,
+            'Lambda2'    :         200,
+            'Alpha'      :         0.075
          }
 
-        , "post_process_fun" : post_process_fun                    ### After prediction  ##########################################
+        , "post_process_fun" : post_process_fun                    ### After prediction  #########################
         , "pre_process_pars" : {"y_norm_fun" :  pre_process_fun ,  ### Before training  ##########################
 
         ### Pipeline for data processing ##############################
@@ -103,29 +106,33 @@ def config1() :
           #### neeed to 0-1 Normalize the input
 
         ],
-        }},
+      }},
+
 
       "compute_pars": { "metric_list":  ["accuracy_score","average_precision_score"],
                         'compute_pars': {'epochs': 1 },
-
                         'path_checkpoint' : "ztmp_checkpoint/"
-                      },
+      },
+
 
       "data_pars": { "n_sample" : n_sample,
           "download_pars" : None,
 
           ### family of columns for raw input data  #########################################################
-          "cols_input_type" : cols_input_type_1,
+          "cols_input_type" :  {
+            'colid'  : colid,
+            'colcat' : colcat,
+            'colnum' : colnum,
+            'coly'  :  coly,
+          },
 
           ### family of columns used for model input  #########################################################
-          "cols_model_group": [ "colnum",  "colcat",
-                              ]
+          "cols_model_group": [ "colnum_bin",  "colcat_bin"  ]
 
-         ,'cols_model_type' : {
-              'cols_cross_input':  [ "colcat", ],
-              'cols_deep_input':   [ 'colnum',  ],
-          }
-
+        ,'cols_model_type2': {
+            'colcontinuous':   colnum ,
+            'colsparse' :      colcat,
+        }
           ### Filter data rows   ##################################################################
          ,"filter_pars": { "ymax" : 2 ,"ymin" : -1 }
 
@@ -135,15 +142,11 @@ def config1() :
     ##### Filling Global parameters    ############################################################
     model_dict        = global_pars_update(model_dict, data_name, config_name=os_get_function_name() )
 
-    # Read train features
-    import pandas as pd
-    import zipfile
-    from io import StringIO
-    import numpy as np
 
-    #feature_arc = zipfile.ZipFile(model_dict['global_pars']['path_data_preprocess'] + 'features.zip', 'r')
-    #df_bytes = feature_arc.read('features.csv')
-    #df = pd.read_csv(StringIO(df_bytes.decode('utf-8')))
+
+    # Read train features
+    """
+    import pandas as pd, numpy as np
     df = pd.read_csv( model_dict['global_pars']['path_data_preprocess'] + 'features.zip' )
 
     colnum = model_dict['data_pars']['cols_input_type']['colnum']
@@ -170,7 +173,7 @@ def config1() :
         'colcat_unique' : colcat_unique,
         'colembed_dict' : colembed_dict,
     }
-
+    """
     return model_dict
 
 
@@ -198,8 +201,11 @@ from core_run import predict
 
 
 ###########################################################################################################
-###########################################################################################################
 if __name__ == "__main__":
-    d = { "train" : train, "predict" : predict, "config" : config_default }
+    from pyinstrument import Profiler;  profiler = Profiler() ; profiler.start()
     import fire
-    fire.Fire(d)
+    fire.Fire()
+    profiler.stop() ; print(profiler.output_text(unicode=True, color=True))
+
+
+

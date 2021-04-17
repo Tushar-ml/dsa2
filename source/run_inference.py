@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 python source/run_inference.py  run_predict  --n_sample 1000  --config_name lightgbm  --path_model /data/output/a01_test/   --path_output /data/output/a01_test_pred/     --path_data_train /data/input/train/
-
 """
-import warnings,sys, json, gc, os, pandas as pd, importlib
+import warnings,sys, os, json, importlib, copy
 warnings.filterwarnings('ignore')
 
 ####################################################################################################
@@ -19,11 +18,12 @@ def log2(*s):
 def log3(*s):
     if verbosity >= 3 : print(*s, flush=True)
 
+
 ####################################################################################################
 #### Add path for python import
 sys.path.append( os.path.dirname(os.path.abspath(__file__)) + "/")
 root = os.path.abspath(os.getcwd()).replace("\\", "/") + "/"
-log2(root)
+log(root)
 
 
 ####################################################################################################
@@ -36,7 +36,6 @@ def model_dict_load(model_dict, config_path, config_name, verbose=True):
         config_path ([type]): [description]
         config_name ([type]): [description]
         verbose (bool, optional): [description]. Defaults to True.
-
     Returns:
         [type]: [description]
     """
@@ -60,6 +59,10 @@ def map_model(model_name):
        path = os.path.dirname(os.path.abspath(model_name))
        sys.path.append(path)
        mod    = os.path.basename(model_name).replace(".py", "")
+
+       if '::' in mod:
+          mod = mod.split('::')[0]
+
        modelx = importlib.import_module(mod)
        return modelx
 
@@ -88,7 +91,6 @@ def predict(model_name, path_model, dfX, cols_family, model_dict):
         path_model {[str]} -- [description]
         dfX {[DataFrame]} -- [description]
         cols_family {[dict]} -- [description]
-
     Returns: ypred
         [numpy.array] -- [vector of prediction]
     """
@@ -143,7 +145,7 @@ def run_predict(config_name, config_path, n_sample=-1,
     colid            = load(f'{path_pipeline}/colid.pkl')
     df               = load_dataset(path_data, path_data_y=None, colid=colid, n_sample=n_sample)
     dfX, cols        = preprocess(df, path_pipeline, preprocess_pars=pars)
-    coly = cols["coly"]  
+    coly = cols["coly"]
 
 
     log("#### Extract column names  #########################################################")
@@ -171,7 +173,7 @@ def run_predict(config_name, config_path, n_sample=-1,
 
 
     log("############ Saving prediction  ###################################################" )
-    log(ypred.shape, path_output)
+    log(len(ypred), path_output)
     os.makedirs(path_output, exist_ok=True)
     df.to_csv(f"{path_output}/prediction.csv")
     log(df.head(8))
