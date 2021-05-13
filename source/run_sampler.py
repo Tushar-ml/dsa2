@@ -7,58 +7,34 @@ python source/run_train.py  run_train --config_name elasticnet  --path_data_trai
 activate py36 && python source/run_train.py  run_train   --n_sample 100  --config_name lightgbm  --path_model_config source/config_model.py  --path_output /data/output/a01_test/     --path_data_train /data/input/train/
 
 """
-import warnings
+import warnings, sys, os, json, importlib, pandas as pd
 warnings.filterwarnings('ignore')
-import sys, os, json, importlib
-import pandas as pd
+####################################################################################################
+from utilmy import global_verbosity, os_makedirs
+verbosity = global_verbosity(__file__, "/../config.json" ,default= 5)
+
+def log(*s):
+    if verbosity >= 1 : print(*s, flush=True)
+
+def log2(*s):
+    if verbosity >= 2 : print(*s, flush=True)
+
+def log3(*s):
+    if verbosity >= 3 : print(*s, flush=True)
+
 ####################################################################################################
 #### Add path for python import
 sys.path.append( os.path.dirname(os.path.abspath(__file__)) + "/")
-
-#### Root folder analysis
 root = os.path.abspath(os.getcwd()).replace("\\", "/") + "/"
-print(root)
+log(root)
 
-DEBUG = True
 
-####################################################################################################
 ####################################################################################################
 from util_feature import   load, save_list, load_function_uri, save
 from run_preprocess import  preprocess, preprocess_load
 
-
 SUPERVISED_MODELS = ['SMOTE', 'SMOTEENN', 'SMOTETomek', 'NearMiss']
 
-"""
-### bug with logger
-from util import logger_class
-logger = logger_class()
-
-def log(*s):
-    logger.log(*s, level=1)
-
-def log2(*s):
-    logger.log(*s, level=2)
-
-def log_pd(df, *s, n=0, m=1):
-    sjump = "\n" * m
-    log(sjump,  df.head(n))
-"""
-
-
-def log(*s, n=0, m=0):
-    sspace = "#" * n
-    sjump = "\n" * m
-    ### Implement pseudo Logging
-    print(sjump, sspace, s, sspace, flush=True)
-
-
-def log2(*s, n=0, m=0):
-    if DEBUG :
-        sspace = "#" * n
-        sjump = "\n" * m
-        ### Implement pseudo Logging
-        print(sjump, sspace, s, sspace, flush=True)
 
 
 def save_features(df, name, path):
@@ -87,23 +63,23 @@ def model_dict_load(model_dict, config_path, config_name, verbose=True):
 ####################################################################################################
 ##### train    #####################################################################################
 def map_model(model_name):
-    """
-      Get the Class of the object stored in source/models/
+    """ Get the Class of the object stored in source/models/
     :param model_name:   model_sklearn
     :return: model module
-
     """
-
     ##### Custom folder
     if ".py" in model_name :
-       path = os.path.parent(model_name)
+       log3(model_name)
+       model_file = model_name.split(":")[0]
+       ### Asbolute path of the file
+       path = os.path.dirname(os.path.abspath(model_file))
        sys.path.append(path)
-       mod = os.path.basename(model_name)
+       mod    = os.path.basename(model_file).replace(".py", "")
        modelx = importlib.import_module(mod)
+       log3(model_file, modelx)
        return modelx
 
-
-    ##### Local folder
+    ##### Repo folder
     model_file = model_name.split(":")[0]
     if  'optuna' in model_name : model_file = 'optuna_lightgbm'
 
@@ -122,24 +98,6 @@ def map_model(model_name):
     return modelx
 
 
-def mlflow_register(dfXy, model_dict: dict, stats: dict, mlflow_pars:dict ):
-    log("#### Using mlflow #########################################################")
-    # def register(run_name, params, metrics, signature, model_class, tracking_uri= "sqlite:///local.db"):
-    from run_mlflow import register
-    from mlflow.models.signature import infer_signature
-
-    train_signature = dfXy[model_dict['data_pars']['cols_model']]
-    y_signature     = dfXy[model_dict['data_pars']['coly']]
-    signature       = infer_signature(train_signature, y_signature)
-
-    register( run_name    = model_dict['global_pars']['config_name'],
-             params       = model_dict['global_pars'],
-             metrics      = stats["metrics_test"],
-             signature    = signature,
-             model_class  = model_dict['model_pars']["model_class"],
-             tracking_uri = mlflow_pars.get( 'tracking_db', "sqlite:///mlflow_local.db")
-            )
-
 
 def train(model_dict, dfX, cols_family, post_process_fun):
     """  Train the model using model_dict, save model, save prediction
@@ -153,15 +111,13 @@ def train(model_dict, dfX, cols_family, post_process_fun):
     data_pars                = model_dict['data_pars']
     model_name, model_path   = model_pars['model_class'], model_dict['global_pars']['path_train_model']
     metric_list              = compute_pars['metric_list']
-    model_file               = model_pars.get('model_file',"model_sampler")
+    #model_file               = model_pars.get('model_file',"model_sampler")
 
     assert  'cols_model_type2' in data_pars, 'Missing cols_model_type2, split of columns by data type '
     log2(data_pars['cols_model_type2'])
 
 
     log("#### Model Input preparation #########################################################")
-    log(dfX.shape)
-    dfX    = dfX.sample(frac=1.0)
     itrain = int(0.6 * len(dfX))
     ival   = int(0.8 * len(dfX))
     colsX  = data_pars['cols_model']
@@ -170,6 +126,9 @@ def train(model_dict, dfX, cols_family, post_process_fun):
     log('Model coly', coly)
     log('Model column type: ',data_pars['cols_model_type2'])
 
+
+    log(dfX.shape)
+    dfX    = dfX.sample(frac=1.0)
     data_pars['data_type'] = 'ram'
     data_pars['train'] = {'Xtrain' : dfX[colsX].iloc[:itrain, :],
                           'ytrain' : dfX[coly].iloc[:itrain],
@@ -181,31 +140,30 @@ def train(model_dict, dfX, cols_family, post_process_fun):
                           }
     
     data_pars['eval'] = {'X'   : dfX[colsX].iloc[ival:, :],
-                          'y'   : dfX[coly].iloc[ival:],
-                          }
+                         'y'   : dfX[coly].iloc[ival:], }
 
     log("#### Init, Train ############################################################")
     # from config_model import map_model    
-    if len(model_file) == 0:
-        modelx = map_model(model_name)
-    else:
-        modelx = map_model(model_file +":"+model_name)    
+
+    modelx = map_model(model_name)
+    #if len(model_file) == 0:
+    #    modelx = map_model(model_name)
+    #else:
+    #    modelx = map_model(model_file +":"+model_name)
     log(modelx)
     modelx.reset()
     modelx.init(model_pars, compute_pars=compute_pars)
 
-    if 'optuna' in model_name:
-        modelx.fit(data_pars, compute_pars)
-        # No need anymore
-        # modelx.model.model_pars['optuna_model'] = modelx.fit(data_pars, compute_pars)
-    else:
-        modelx.fit(data_pars, compute_pars)
+    modelx.fit(data_pars, compute_pars)
 
 
     log("#### Transform ################################################################")
+    """
+       This part should match the source/models/ naming pattern.
+    """
     if model_name in SUPERVISED_MODELS:
         dfX2, y = modelx.transform((dfX[colsX], dfX[coly]),data_pars=data_pars, compute_pars=compute_pars)
-        dfX2 = pd.DataFrame(dfX2, columns = colsX)
+        dfX2    = pd.DataFrame(dfX2, columns = colsX)
     else:
         print(f'model_name:{model_file,model_name}')
         dfX2 = modelx.transform(dfX[colsX], data_pars=data_pars, compute_pars=compute_pars)
@@ -217,9 +175,9 @@ def train(model_dict, dfX, cols_family, post_process_fun):
     log("Actual    : ",  dfX[colsX])
     log("Prediction: ",  dfX2)
 
+
     log("#### Metrics ###############################################################")
     from util_feature import  metrics_eval
-
     # metrics_test = metrics_eval(metric_list,
     #                             ytrue       = dfX[coly].iloc[ival:],
     #                             ypred       = dfX[coly + '_pred'].iloc[ival:],
@@ -238,10 +196,12 @@ def train(model_dict, dfX, cols_family, post_process_fun):
 
 
     log("### Reload model,            ###############################################")
+    modelx.reset()
+    modelx.load_model(model_path )
     log(modelx.model.model_pars, modelx.model.compute_pars)
-    a = load(model_path + "/model.pkl")
-    log("Reload model pars", a.model_pars)
-    
+    log("Reload model pars", model_pars)
+
+
     return dfX2.iloc[:ival, :].reset_index(), dfX2.iloc[ival:, :].reset_index(), stats
 
 
@@ -313,12 +273,6 @@ def run_train(config_name, config_path="source/config_model.py", n_sample=5000,
     dfXy, dfXytest,stats  = train(model_dict, dfXy, cols, post_process_fun)
 
 
-    log("#### Register model ##########################################################")
-    mlflow_pars = model_dict.get('compute_pars', {}).get('mlflow_pars', None)
-    if mlflow_pars is not None:
-        mlflow_register(dfXy, model_dict, stats, mlflow_pars)
-
-
     if return_mode == 'dict' :
         return { 'dfXy' : dfXy, 'dfXytest': dfXytest, 'stats' : stats   }
 
@@ -333,10 +287,8 @@ def run_train(config_name, config_path="source/config_model.py", n_sample=5000,
 
 
 ####################################################################################################
-############CLI Command ############################################################################
 def transform(model_name, path_model, dfX, cols_family, model_dict):
-    """
-    Arguments:
+    """Arguments:
         model_name {[str]} -- [description]
         path_model {[str]} -- [description]
         dfX {[DataFrame]} -- [description]
@@ -352,8 +304,8 @@ def transform(model_name, path_model, dfX, cols_family, model_dict):
 
 
     log("#### Load model  ############################################")
-    print(path_model + "/model/model.pkl")
-    modelx.model = modelx.load(path_model + "/model.pkl")
+    log(path_model + "/model/model.pkl")
+    modelx.load_model(path_model )
 
     colsX       = load(path_model + "/colsX.pkl")   ## column name
 
@@ -362,9 +314,9 @@ def transform(model_name, path_model, dfX, cols_family, model_dict):
     assert modelx.model is not None, "cannot load modelx, " + path_model
     log("#### modelx\n", modelx.model.model)
 
+
     log("### Prediction  ############################################")
     # dfX1  = dfX.reindex(columns=colsX)   #reindex included
-
     dfX = modelx.transform(dfX,
                            data_pars    = model_dict['data_pars'],
                            compute_pars = model_dict['compute_pars']
@@ -395,8 +347,6 @@ def run_transform(config_name, config_path, n_sample=1,
     pars = {'cols_group': model_dict['data_pars']['cols_input_type'],
             'pipe_list' : model_dict['model_pars']['pre_process_pars']['pipe_list']}
     
-
-
 
     ##########################################################################################
     from run_preprocess import preprocess_inference   as preprocess
@@ -446,6 +396,8 @@ def run_transform(config_name, config_path, n_sample=1,
         os.makedirs(path_check_out, exist_ok=True)
         dfX.to_parquet(path_check_out + "/dfX.parquet")  # train input data generate parquet
         log("######### Finish #############################################################", )
+
+
 
 
 if __name__ == "__main__":

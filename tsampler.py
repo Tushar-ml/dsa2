@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 """
 ### Usage:
-  python tsampler.py  train_sampler        --config  config_sampler
-  python tsampler.py  transform_sampler    --config  config_sampler
+  python tsampler.py  train         --config  config_sampler
+  python tsampler.py  transform     --config  config_sampler
 
 
 
@@ -11,10 +11,9 @@
 import warnings, copy, os, sys
 warnings.filterwarnings("ignore")
 
-####################################################################################
 ###### Path ########################################################################
 root_repo      =  os.path.abspath(os.getcwd()).replace("\\", "/") + "/"     ; print(root_repo)
-THIS_FILEPATH  =  os.path.abspath(__file__) 
+THIS_FILEPATH  =  os.path.abspath(__file__)
 
 sys.path.append(root_repo)
 from source.util_feature import save,os_get_function_name
@@ -24,7 +23,7 @@ def global_pars_update(model_dict,  data_name, config_name):
     dir_data  = root_repo + "/data/"  ; print("dir_data", dir_data)
 
     m                      = {}
-    m["config_path"]       = THIS_FILEPATH  
+    m["config_path"]       = THIS_FILEPATH
     m["config_name"]       = config_name
     m["model_file"]        = "model_sampler"
 
@@ -77,31 +76,26 @@ cols_input_type_1 = {
 
 ####################################################################################
 def config_sampler() :
-    """
-       ONE SINGLE DICT Contains all needed informations for
-       used for titanic classification task
-    """
     data_name    = "titanic"         ### in data/input/
     model_class  = "CTGAN"  ### ACTUAL Class name for model_sklearn.py
     n_sample     = 1000
 
     def post_process_fun(y):   ### After prediction is done
-        return  int(y)
+        return  y
 
     def pre_process_fun(y):    ### Before the prediction is done
-        return  int(y)
+        return  y
 
 
     model_dict = {
       "model_pars": {
-        ### LightGBM API model   #######################################
          "model_class": model_class
         ,"model_pars" : {
                         }
 
-        , "post_process_fun" : post_process_fun   ### After prediction  ##########################################
+        , "post_process_fun" : post_process_fun   ### After prediction
         , "pre_process_pars" : {
-              "y_norm_fun" :  pre_process_fun ,  ### Before training  ##########################
+              "y_norm_fun" :  pre_process_fun ,  ### Before training
               ### Pipeline for data processing ##############################
               "pipe_list": [
                   #### coly target prorcessing
@@ -116,13 +110,14 @@ def config_sampler() :
 
                               ],
                                   }
-                      },
+      },
 
-      "compute_pars": { "metric_list": ["accuracy_score","average_precision_score"]
+      "compute_pars": { "metric_list": ["accuracy_score","average_precision_score"],
                         # ,"mlflow_pars" : {}   ### Not empty --> use mlflow
-                      },
+                        'compute_pars' : {}
+      },
 
-      "data_pars": { 
+      "data_pars": {
           "n_sample" : n_sample,
           "download_pars" : None,
           ### Filter data rows   ##################################################################
@@ -142,22 +137,50 @@ def config_sampler() :
             'continuous'   : [ 'colnum',   ],
             'sparse'       : [ 'colcat_bin', 'colnum_bin',  ],
             'my_split_23'  : [ 'colnum_bin',   ],
-                              } 
-
          }
       }
+    }
 
     ##### Filling Global parameters    ############################################################
     model_dict        = global_pars_update(model_dict, data_name, config_name=os_get_function_name() )
     return model_dict
 
 
+def log(*s):
+    print(s, flush=True)
 
-#####################################################################################
-########## Profile data #############################################################
-from core_run import  data_profile
-# def data_profile(path_data="", path_output="", n_sample= 5000):
 
+
+def test_batch(nsample=1000):
+   ll = [
+     ('CTGAN', { })
+
+   ]
+
+   for m in ll :
+     mdict['model_pars']['model_class'] = m[0]
+     mdict['model_pars']['model_pars']  = m[1]
+
+     mdict = config_sampler()
+     m     = mdict['global_pars']
+     log(mdict)
+     from source import run_sampler
+     run_sampler.run_train(config_name    =  None,
+                        config_path       =  None,
+                        n_sample          =  nsample,
+                        model_dict        =  mdict
+                        )
+
+
+<<<<<<< HEAD
+##################################################################################
+########## Train #################################################################
+# def train_sampler(config=None, nsample=None):
+from core_run import train_sampler
+from pprint import pprint
+=======
+
+>>>>>>> f7be6a6830400b2694bd4142f48034b3822a127b
 
 
 ###################################################################################
@@ -166,23 +189,7 @@ from core_run import  data_profile
 from core_run import preprocess
 
 
-
-
-##################################################################################
-########## Train #################################################################
-# def train_sampler(config=None, nsample=None):
-from core_run import train_sampler
-from pprint import pprint
-
-
-def test_batch():
-   mdict = config_sampler()
-   
-   ll = [
-     ('CTGAN', { })
-
-   ]
-
+<<<<<<< HEAD
    for m in ll :
     mdict['model_pars']['model_class'] = m[0]
     mdict['model_pars']['model_pars']  = m[1]
@@ -199,23 +206,35 @@ def test_batch():
                         model_dict= mdict
                         # use_mlmflow       =  False
                         )
+=======
+
+
+##################################################################################
+########## Train #################################################################
+# train_sampler(config=None, nsample=None):
+from core_run import train_sampler as train
+
+>>>>>>> f7be6a6830400b2694bd4142f48034b3822a127b
 
 
 ####################################################################################
 ####### Inference ##################################################################
-# predict(config="", nsample=10000)
-# from core_run import transform_sampler
+# transform(config='', nsample=None):
+from core_run import transform
 
 
 
-
-
-###########################################################################################################
-###########################################################################################################
 if __name__ == "__main__":
+    from pyinstrument import Profiler;  profiler = Profiler() ; profiler.start()
     import fire
+<<<<<<< HEAD
     fire.Fire(test_batch)
     
+=======
+    fire.Fire()
+    profiler.stop() ; print(profiler.output_text(unicode=True, color=True))
+
+>>>>>>> f7be6a6830400b2694bd4142f48034b3822a127b
 
 
 

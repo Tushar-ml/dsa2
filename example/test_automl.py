@@ -228,9 +228,14 @@ from core_run import predict
 ###########################################################################################################
 ###########################################################################################################
 if __name__ == "__main__":
-    d = { 'data_profile': data_profile,  'train' : train, 'predict' : predict, 'config' : config_default }
+    from pyinstrument import Profiler;  profiler = Profiler() ; profiler.start()
     import fire
-    fire.Fire(d)
+    fire.Fire()
+    profiler.stop() ; print(profiler.output_text(unicode=True, color=True))
+
+
+
+
     
 
 

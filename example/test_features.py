@@ -535,8 +535,14 @@ from core_run import predict
 ###########################################################################################################
 ###########################################################################################################
 if __name__ == "__main__":
+    from pyinstrument import Profiler;  profiler = Profiler() ; profiler.start()
     import fire
     fire.Fire()
+    profiler.stop() ; print(profiler.output_text(unicode=True, color=True))
+
+
+
+
 
 
 

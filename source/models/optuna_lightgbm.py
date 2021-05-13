@@ -115,14 +115,6 @@ def fit(data_pars=None, compute_pars=None, out_pars=None, **kw):
     return model_fit
 
 
-
-def eval(data_pars=None, compute_pars=None, out_pars=None, **kw):
-    """
-       Return metrics of the model when fitted.
-    """
-    pass
-
-
 def predict(Xpred=None, data_pars={}, compute_pars={}, out_pars={}, **kw):
     global model, session
     ## optuna_model = model.model_pars.get('optuna_model', None)   #### NO model is saved in model.model
@@ -443,6 +435,11 @@ def benchmark_helper(train_df, test_df):
 
     test_helper( m['model_pars'], m['data_pars'], m['compute_pars'])
 
+# def eval(data_pars=None, compute_pars=None, out_pars=None, **kw):
+#     """
+#        Return metrics of the model when fitted.
+#     """
+#     pass
 
 ####################################################################################################################
 if __name__ == '__main__':

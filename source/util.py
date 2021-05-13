@@ -112,6 +112,40 @@ df.to_parquet('/users/nick/desktop/test.parquet',
 
 
 
+def pd_to_scipy_sparse_matrix(df):
+    """
+    Converts a sparse pandas data frame to sparse scipy csr_matrix.
+    :param df: pandas data frame
+    :return: csr_matrix
+    """
+    from scipy.sparse import lil_matrix
+    arr = lil_matrix(df.shape, dtype=np.float32)
+    for i, col in enumerate(df.columns):
+        ix = df[col] != 0
+        arr[np.where(ix), i] = 1
+
+    return arr.tocsr()
+
+
+
+def pd_to_keyvalue_dict(dfa, colkey= [ "shop_id", "l2_genre_id" ]   , col_list='item_id',  to_file=""):
+    import copy, pickle
+    dfa = copy.deepcopy(dfa)
+    def to_key(x):
+        return "_".join([ str(x[t]) for t in colkey  ])
+
+    dfa["__key"] = dfa.apply( lambda x :  to_key(x) , axis=1  )
+    # dd = pd.DataFrame( dfa.groupby([ "__key"  ]).apply(lambda dfi :  [  int(t) for t in  dfi['item_id'].values] ) )
+    dd = pd.DataFrame( dfa.groupby([ "__key"  ]).apply(lambda dfi :    dfi[col_list].values ) )
+    dd.columns = ['__val']
+    dd = dd.to_dict("dict")['__val']
+    save(dd, to_file)
+
+
+
+
+
+
 
 
         

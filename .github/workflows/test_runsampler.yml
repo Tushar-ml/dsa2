@@ -93,7 +93,7 @@ jobs:
     #- name: run_models
     #  run: chmod -R 777 . && ztest/run_models.sh   # 2>&1 | tee   /home/runner/work/mlmodels/mlmodels_store/log_import/log_optim.py
 
-    - name: cd source - models && python model_sampler.py  test
+    - name: python model_sampler.py  test
       #continue-on-error: true
       run:  |
             cd source/models && python model_sampler.py  test
@@ -103,20 +103,27 @@ jobs:
     - name: python source/run_sampler.py 
       #continue-on-error: true
       run:  |
-            python source-run_sampler.py  
+            python source/run_sampler.py
             echo "source/run_sampler.py" >> file_check.txt
 
 
-    - name: python tsampler.py  train_sampler
+    - name: python tsampler.py  train
       #continue-on-error: true
       run:  |
-            python tsampler.py  train_sampler        --config  config_sampler
-            python tsampler.py  transform_sampler    --config  config_sampler
+            python tsampler.py  train        --config  config_sampler
             echo "tsampler.py" >> file_check.txt
 
 
+    - name: python tsampler.py  transform
+      #continue-on-error: true
+      run:  |
+            python tsampler.py  transform    --config  config_sampler
+            echo "tsampler.py" >> file_check.txt
 
 
+    - name: python model_encoder.py test
+      continue-on-error: true
+      run:  cd source/models && ipython model_encoder.py test
 
 
 

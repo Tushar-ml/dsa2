@@ -220,3 +220,18 @@ mlflow_local.db
 /source/models/ztmp2/model_functions_3.py
 /source/models/ztmp_checkpoint
 /source/models/data/input/ztest/fake
+# all local history folders
+*.history
+# data folders
+*goodbooks_dataset/
+*rec_data/
+
+/example/data/output/titanic/config1/features_store/colnum_bin-Age_SibSp_Parch_Fare
+/example/data/output/titanic/config1/pipeline
+/example/data/output/titanic/config1/features_store/dfy
+/example/data/input/download/github_arita37-dsa2_data-raw-master--input-titanic-train
+/example/data/output/titanic/config1/features_store/coly
+/example/data/output/titanic/config_sampler/pipeline
+/example/data/output/titanic/config_sampler/features_store/coly
+/example/data/output/titanic/config_sampler/features_store/dfX
+/data/output

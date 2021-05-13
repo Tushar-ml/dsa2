@@ -280,7 +280,6 @@ def pd_read_file(path_glob="*.pkl", ignore_index=True,  cols=None,
       for i in range(n_pool):
         if i >= len(job_list): break
         dfi   = job_list[ i].get()
-
         if col_filter is not None : dfi = dfi[ dfi[col_filter] == col_filter_val ]
         if cols is not None :       dfi = dfi[cols]
         if nrows > 0        :       dfi = dfi.iloc[:nrows,:]
@@ -504,7 +503,6 @@ def load_function_uri(uri_name="myfolder/myfile.py::myFunction"):
     package_path, class_name = pkg[0], pkg[1]
 
     package = package_path.replace("/", ".").replace(".py", "")
-
     try:
         #### Import from package mlmodels sub-folder
         return  getattr(importlib.import_module(package), class_name)

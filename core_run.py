@@ -3,42 +3,35 @@
 """
 Run template
 
-
 python core_run.py data_profile --config outlier_predict.py::titanic_lightgbm
 
-                                                                                     
 python core_run.py preprocess --config outlier_predict.py::titanic_lightgbm
-
 
 python core_run.py train --config outlier_predict.py::titanic_lightgbm
 
-
 python core_run.py predict --config outlier_predict.py::titanic_lightgbm
-
 
 
 """
 import warnings, copy, os, sys
 warnings.filterwarnings('ignore')
 
-
 ####################################################################################
-from source.util_feature import log
+def log(*s):
+  print(*s)
 
-print( os.getcwd())
+
 root = os.path.abspath(os.getcwd()).replace("\\", "/") + "/"
-print(root)
-
 dir_data  = os.path.abspath( root + "/data/" ) + "/"
 dir_data  = dir_data.replace("\\", "/")
-print(dir_data)
+log(root, dir_data)
 
 
- 
+####################################################################################
 def get_global_pars(config_uri=""):
   log("#### Model Params Dynamic loading  ##########################################")
   from source.util_feature import load_function_uri
-  print("config_uri",config_uri)
+  log("config_uri",config_uri)
   model_dict_fun = load_function_uri(uri_name=config_uri )
 
   #### Get dict + Update Global variables
@@ -69,8 +62,9 @@ def get_config_path(config=''):
     else :
         config_uri  = config
         config_name = config.split("::")[1]
+
     ##################################################################
-    print("default: ", config_uri)
+    log("default: ", config_uri)
     return config_uri, config_name
 
 
@@ -181,8 +175,13 @@ def predict(config='', nsample=None):
                               model_dict  = None
                               )
 
-####################################################################################
-########## Train Sampler ###########################################################
+
+
+
+
+#########################################################################################
+#########################################################################################
+########## source/ru_sampler Train Sampler ###############################################
 def train_sampler(config='', nsample=None):
     """  train a model with  confi_name  and nsample
     :param config:
@@ -195,16 +194,13 @@ def train_sampler(config='', nsample=None):
     m     = mdict['global_pars']
     log(mdict)
     from source import run_sampler
-    run_sampler.run_train(config_name       =  config_name,
+    run_sampler.run_train(config_name     =  config_name,
                         config_path       =  m['config_path'],
                         n_sample          =  nsample if nsample is not None else m['n_sample'],
                         # use_mlmflow       =  False
                         )
 
-
-
-########################################################################################
-####### tranform ########################################################################
+####### source/run_sampler tranform ####################################################
 def transform(config='', nsample=None):
     """
     :param config:
@@ -229,8 +225,13 @@ def transform(config='', nsample=None):
                               model_dict  = None
                               )
 
+
+
+
+
+
 ########################################################################################
-####### Inference ######################################################################
+#######  HYPER  ########################################################################
 def hyperparam_wrapper(config_full="",
                        ntrials=2, n_sample=5000, debug=1,
                        path_output         = "data/output/titanic1/",
@@ -280,6 +281,10 @@ def hyperparam_wrapper(config_full="",
     log(path_output)
 
 
+
+
+
+
 ########################################################################################
 ####### Inference / Deploy #############################################################
 def deploy():
@@ -292,6 +297,9 @@ def deploy():
     """
     import uvicorn
     uvicorn.run("core_deploy:app", host="127.0.0.1", port=8000, log_level="info")
+
+
+
 
 
 ##########################################################################################

@@ -1,10 +1,9 @@
+  
 # pylint: disable=C0321,C0103,E1221,C0301,E1305,E1121,C0302,C0330
 # -*- coding: utf-8 -*-
 """
 python source/run_train.py  run_train --config_name elasticnet  --path_data_train data/input/train/    --path_output data/output/a01_elasticnet/
-
 python source/run_train.py  run_train   --n_sample 100  --config_name lightgbm  --path_model_config source/config_model.py  --path_output /data/output/a01_test/     --path_data_train /data/input/train/
-
 """
 import warnings,sys, os, json, importlib, copy
 warnings.filterwarnings('ignore')
@@ -71,7 +70,6 @@ def map_model(model_name):
       Get the Class of the object stored in source/models/
     :param model_name:   model_sklearn
     :return: model module
-
     """
     ##### Custom folder
     if ".py" in model_name :
@@ -104,12 +102,11 @@ def map_model(model_name):
 def data_split(dfX, data_pars, model_path, colsX, coly):
     """
        Mini Batch data Split on Disk
-
     """
     import pandas as pd
 
     ##### Dense Dict : not good  #################################################
-    if data_pars['date_type'] == 'ram':
+    if data_pars['data_type'] == 'ram':
         log2(dfX.shape)
         dfX    = dfX.sample(frac=1.0)
         itrain = int(0.6 * len(dfX))
@@ -212,11 +209,11 @@ def train(model_dict, dfX, cols_family, post_process_fun):
 
     log("#### Model Input : Actual data split ########################################")
     #### date_type :  'ram', 'pandas', tf_data,  torch_data,
-    data_pars['data_type'] = data_pars.get('data_type', 'ram')
+    data_pars['data_type'] = data_pars.get('data_type', 'disk_data')
 
 
     ###### Pass full Pandas dataframe  ################################################
-    log2(dfX.shape)
+    """log2(dfX.shape)
     dfX    = dfX.sample(frac=1.0)
     itrain = int(0.6 * len(dfX))
     ival   = int(0.8 * len(dfX))
@@ -229,13 +226,11 @@ def train(model_dict, dfX, cols_family, post_process_fun):
                            'Xval'   : dfX[colsX].iloc[ival:, :].astype('float32'),
                            'yval'   : dfX[coly].iloc[ival:].astype('float32'),
                          }
-
-    """
+    
     #### TODO : Lazy Dict to have large dataset
     ##### Lazy Dict mechanism : Only path
-    data_pars = data_split(dfX, data_pars, model_path, colsX, coly)
     """
-
+    data_pars = data_split(dfX, data_pars, model_path, colsX, coly)
 
 
     log("#### Init, Train #############################################################")
@@ -248,7 +243,31 @@ def train(model_dict, dfX, cols_family, post_process_fun):
 
     ### Using Actual daa in data_pars['train']
     modelx.fit(data_pars, compute_pars)
-    
+
+
+    log("#### Predict ################################################################")
+    ypred, ypred_proba = modelx.predict((dfX,colsX), data_pars= data_pars_ref, compute_pars=compute_pars)
+
+    dfX[coly + '_pred'] = ypred  # y_norm(ypred, inverse=True)
+
+    dfX[coly]            = dfX[coly].apply(lambda  x : post_process_fun(x) )
+    dfX[coly + '_pred']  = dfX[coly + '_pred'].apply(lambda  x : post_process_fun(x) )
+    log2("Prediction    : ",  dfX[[ coly, coly + '_pred' ]] )
+
+    itrain = int(0.6 * len(dfX))
+    ival = int(0.8 * len(dfX))
+
+    if ypred_proba is None :  ### No proba
+        ypred_proba_val = None
+
+    elif len(ypred_proba.shape) <= 1  :  #### Single dim proba
+       ypred_proba_val      = ypred_proba[ival:]
+       dfX[coly + '_proba'] = ypred_proba
+
+    elif len(ypred_proba.shape) > 1 :   ## Muitple proba
+        from util_feature import np_conv_to_one_col
+        ypred_proba_val      = ypred_proba[ival:,:]
+        dfX[coly + '_proba'] = np_conv_to_one_col(ypred_proba, ";")  ### merge into string "p1,p2,p3,p4"
 
     log("#### Predict ################################################################")
     ypred = modelx.predict(dfX[colsX], data_pars= data_pars_ref, compute_pars=compute_pars)
@@ -369,9 +388,9 @@ def run_train(config_name, config_path="source/config_model.py", n_sample=5000,
                                      cols_group,       ### dict of column family
                                      n_sample,
                                      preprocess_pars,
-                                     path_features_store  ### Store intermediate dataframe
-                                     )
-
+                                     path_features_store,  ### Store intermediate dataframe
+                                     model_dict)
+        
     elif mode == "load_preprocess"  :  #### Load existing data
         dfXy, cols      = preprocess_load(path_train_X, path_train_y, path_pipeline, cols_group, n_sample,
                                           preprocess_pars,  path_features_store=path_features_store)
@@ -498,7 +517,5 @@ def mlflow_register(dfXy, model_dict: dict, stats: dict, mlflow_pars:dict ):
 if __name__ == "__main__":
     import fire
     fire.Fire()
-
-
 
 

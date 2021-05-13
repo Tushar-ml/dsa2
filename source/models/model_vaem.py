@@ -47,7 +47,7 @@ import seaborn as sns; sns.set(style="ticks", color_codes=True)
 ### Need TF 1.4    pip install tensorflow=1.14
 import tensorflow as tf
 print(tf.__version__)
-assert "1."  in str(tf.version.VERSION), 'Compatible only with TF 1.5.1, keras 2.3.1, ' + str(tf.version.VERSION)
+assert "1."  in str(tf.version.VERSION), 'Compatible only with TF 1.4.1 keras 2.3.1, ' + str(tf.version.VERSION)
 
 thisfile_path = os.path.dirname(os.path.abspath(__file__)).replace("\\", "/")
 sys.path.append( thisfile_path + "/repo/VAEM/" )

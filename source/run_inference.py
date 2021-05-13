@@ -113,13 +113,30 @@ def predict(model_name, path_model, dfX, cols_family, model_dict):
     log2("#### modelx\n", modelx.model)
 
     log("### Prediction  ###################################################")
+    dfX    =  data_load_memory(dfX)
     dfX  = dfX.reindex(columns=colsX)   #reindex included
     ypred_tuple = modelx.predict(dfX, data_pars    = model_dict['data_pars'],
-                                      compute_pars = model_dict['compute_pars']                           )
+                                      compute_pars = model_dict['compute_pars'])
     log2('ypred shape', str(ypred_tuple)[:100] )
     return ypred_tuple
 
-
+    
+def data_load_memory(dfX):
+    """
+    Arguments:
+        dfX str or type -- [description]
+    return:
+        dfX: df or type
+    """
+    if isinstance(dfX, str):
+        import glob
+        from utilmy import pd_read_file
+        path = dfX
+        dfX = pd_read_file( dfX + "/*.parquet" )
+        return dfX
+    return dfX
+        
+        
 ####################################################################################################
 ############CLI Command ############################################################################
 def run_predict(config_name, config_path, n_sample=-1,
@@ -144,7 +161,7 @@ def run_predict(config_name, config_path, n_sample=-1,
     from run_preprocess import preprocess_inference   as preprocess
     colid            = load(f'{path_pipeline}/colid.pkl')
     df               = load_dataset(path_data, path_data_y=None, colid=colid, n_sample=n_sample)
-    dfX, cols        = preprocess(df, path_pipeline, preprocess_pars=pars)
+    dfX, cols        = preprocess(df, path_pipeline, preprocess_pars=pars, model_dict=model_dict)
     coly = cols["coly"]
 
 

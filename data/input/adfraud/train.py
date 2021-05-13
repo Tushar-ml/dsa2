@@ -537,7 +537,7 @@ def pd_colcat_get_catcount(df, classcol=None, continuous_ids=[]):
     if not classcol:
         classcol = df.shape[1] - 1
     for i in range(df.shape[1]):
-        if i != classcol and (i in continuous_ids or is_continuous(df[:, i])):
+        if i != classcol and (i in continuous_ids or gef_is_continuous(df[:, i])):
             continue
         else:
             df[:, i] = df[:, i].astype(int)
@@ -563,7 +563,7 @@ def pd_colnum_stats_univariate(df, ncat=None):
                 df[:, i] = (df[:, i] - minv[i]) / (maxv[i] - minv[i])
     else:
         for i in range(df.shape[1]):
-            if is_continuous(df[:, i]):
+            if gef_is_continuous(df[:, i]):
                 maxv[i] = np.max(df[:, i])
                 minv[i] = np.min(df[:, i])
                 mean[i] = np.mean(df[:, i])
@@ -573,7 +573,7 @@ def pd_colnum_stats_univariate(df, ncat=None):
     return df, maxv, minv, mean, std
 
 
-def normalize_data(df, maxv, minv):
+def gef_normalize_data(df, maxv, minv):
     df = df.copy()
     for v in range(df.shape[1]):
         if maxv[v] != minv[v]:
@@ -581,7 +581,7 @@ def normalize_data(df, maxv, minv):
     return df
 
 
-def standardize_data(df, mean, std):
+def gef_standardize_data(df, mean, std):
     df = df.copy()
     for v in range(df.shape[1]):
         if std[v] > 0:
@@ -591,7 +591,7 @@ def standardize_data(df, mean, std):
     return df
 
 
-def is_continuous(df):
+def gef_is_continuous(df):
     observed = df[~np.isnan(df)]  # not consider missing values for this.
     rules = [np.min(observed) < 0,
              np.sum((observed) != np.round(observed)) > 0,
@@ -611,12 +611,12 @@ def train_test_split_gefs(data, ncat, train_ratio=0.7, prep='std'):
 
     if prep == 'norm':
         data_train, maxv, minv, _, _, = pd_colnum_stats_univariate(data_train, ncat)
-        data_test = normalize_data(data_test, maxv, minv)
+        data_test = gef_normalize_data(data_test, maxv, minv)
 
     elif prep == 'std':
         _, maxv, minv, mean, std = pd_colnum_stats_univariate(data_train, ncat)
-        data_train = standardize_data(data_train, mean, std)
-        data_test = standardize_data(data_test, mean, std)
+        data_train = gef_standardize_data(data_train, mean, std)
+        data_test = gef_standardize_data(data_test, mean, std)
 
     X_train, y_train = data_train[:, :-1], data_train[:, -1]
     X_test, y_test   = data_test[:, :-1], data_test[:, -1]

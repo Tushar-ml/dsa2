@@ -119,6 +119,12 @@ jobs:
             ipython example/test_keras_vaemdn.py  train
 
 
+    - name: ipython example/titanic_gefs.py  train
+      continue-on-error: true
+      run:  |
+            ipython example/titanic_gefs.py  train
+
+
     - name: python toutlier.py  train_test
       # continue-on-error: true
       run:  |

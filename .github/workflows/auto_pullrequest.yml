@@ -1,9 +1,11 @@
 name:  pullrequest_auto
 
 on:
-  schedule:
-    - cron:  '0 */23 * * *'
-#    - cron:  '*/10 * * * *'   
+  push :
+    ok
+  #schedule:
+  #  - cron:  '0 */23 * * *'
+# #   - cron:  '*/10 * * * *'
 
 
 
