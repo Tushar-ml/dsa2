@@ -10,7 +10,7 @@
 """
 import warnings, copy, os, sys
 warnings.filterwarnings("ignore")
-
+import snoop
 ####################################################################################
 ###### Path ########################################################################
 root_repo      =  os.path.abspath(os.getcwd()).replace("\\", "/") + "/"     ; print(root_repo)
@@ -174,7 +174,7 @@ from core_run import preprocess
 from core_run import train_sampler
 from pprint import pprint
 
-
+@snoop
 def test_batch():
    mdict = config_sampler()
    
