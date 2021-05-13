@@ -1,0 +1,136 @@
+{
+    "uid": "0e4d22e3-ae3a-48fb-80b8-70dd25d76125",
+    "name": "3_Linear",
+    "preprocessing": [
+        {
+            "scale": [
+                {
+                    "scale": [
+                        3.8558194654314404,
+                        1.6453552048114108,
+                        1.137758212451134,
+                        1.1574514028675242
+                    ],
+                    "mean": [
+                        5.5875,
+                        3.1425,
+                        0.5225,
+                        0.5175
+                    ],
+                    "var": [
+                        14.86734375,
+                        2.70719375,
+                        1.2944937499999998,
+                        1.3396937500000001
+                    ],
+                    "n_samples_seen": 400,
+                    "n_features_in": 4,
+                    "columns": [
+                        "Pclass_bin",
+                        "Age_bin",
+                        "SibSp_bin",
+                        "Parch_bin"
+                    ],
+                    "scale_method": "scale_normal"
+                }
+            ],
+            "ml_task": "binary_classification",
+            "params": {
+                "columns_preprocessing": {
+                    "Pclass_bin": [
+                        "scale_normal"
+                    ],
+                    "Age_bin": [
+                        "scale_normal"
+                    ],
+                    "SibSp_bin": [
+                        "scale_normal"
+                    ],
+                    "Parch_bin": [
+                        "scale_normal"
+                    ]
+                },
+                "target_preprocessing": [
+                    "na_exclude"
+                ],
+                "ml_task": "binary_classification"
+            }
+        }
+    ],
+    "learners": [
+        {
+            "library_version": "0.24.2",
+            "algorithm_name": "Logistic Regression",
+            "algorithm_short_name": "Linear",
+            "uid": "c1795edb-e9dd-4781-ba57-ed92396eafb1",
+            "params": {
+                "model_type": "Linear",
+                "ml_task": "binary_classification",
+                "n_jobs": -1,
+                "seed": 1235,
+                "explain_level": 2
+            },
+            "name": "learner_fold_0"
+        }
+    ],
+    "params": {
+        "additional": {
+            "max_steps": 1,
+            "max_rows_limit": null,
+            "max_cols_limit": null
+        },
+        "preprocessing": {
+            "columns_preprocessing": {
+                "Pclass_bin": [
+                    "scale_normal"
+                ],
+                "Age_bin": [
+                    "scale_normal"
+                ],
+                "SibSp_bin": [
+                    "scale_normal"
+                ],
+                "Parch_bin": [
+                    "scale_normal"
+                ]
+            },
+            "target_preprocessing": [
+                "na_exclude"
+            ],
+            "ml_task": "binary_classification"
+        },
+        "validation_strategy": {
+            "validation_type": "split",
+            "train_ratio": 0.75,
+            "shuffle": true,
+            "stratify": true,
+            "X_path": "AutoML_2\\X.parquet",
+            "y_path": "AutoML_2\\y.parquet",
+            "results_path": "AutoML_2"
+        },
+        "learner": {
+            "model_type": "Linear",
+            "ml_task": "binary_classification",
+            "n_jobs": -1,
+            "seed": 1235,
+            "explain_level": 2
+        },
+        "ml_task": "binary_classification",
+        "explain_level": 2,
+        "name": "3_Linear",
+        "status": "initialized",
+        "final_loss": null,
+        "train_time": null,
+        "data_type": "original",
+        "max_time_for_learner": 360.0
+    },
+    "saved": [
+        "3_Linear\\learner_fold_0.linear"
+    ],
+    "predictions_fname": "3_Linear\\predictions_validation.csv",
+    "metric_name": "logloss",
+    "final_loss": 0.4695283386268134,
+    "train_time": 22.72700309753418,
+    "is_stacked": false,
+    "threshold": 0.5840015348798488
+}

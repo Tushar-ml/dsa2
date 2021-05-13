@@ -1,0 +1,35 @@
+{
+    "columns": [
+        "Pclass_bin",
+        "Age_bin",
+        "SibSp_bin",
+        "Parch_bin",
+        "Fare_bin",
+        "Sex_int",
+        "Embarked_int"
+    ],
+    "rows": 534,
+    "cols": 7,
+    "target_is_numeric": true,
+    "columns_info": {
+        "Pclass_bin": [
+            "scale"
+        ],
+        "Age_bin": [
+            "scale"
+        ],
+        "SibSp_bin": [
+            "scale"
+        ],
+        "Parch_bin": [
+            "scale"
+        ],
+        "Fare_bin": [],
+        "Sex_int": [],
+        "Embarked_int": []
+    },
+    "target_info": [],
+    "n_features": 7,
+    "is_sample_weighted": false,
+    "n_classes": 2
+}

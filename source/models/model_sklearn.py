@@ -37,9 +37,9 @@ from sklearn.ensemble import *
 from sklearn.cluster import *
 from sklearn.tree import *
 from lightgbm import LGBMModel, LGBMRegressor, LGBMClassifier
+from sdv.tabular import CTGAN
 
-
-
+CTGAN = CTGAN()
 def model_automl():
     try :
        from supervised.automl import AutoML
@@ -55,7 +55,7 @@ class Model(object):
     def __init__(self, model_pars=None, data_pars=None
         , compute_pars=None):
         self.model_pars, self.compute_pars, self.data_pars = model_pars, compute_pars, data_pars
-
+        print(model_pars)
         if model_pars is None:
             self.model = None
         else:
@@ -64,7 +64,7 @@ class Model(object):
             else :
                 model_class = globals()[model_pars['model_class']]
 
-            self.model = model_class(**model_pars['model_pars'])
+            self.model = model_class
             log(model_class, self.model)
 
 
@@ -79,7 +79,7 @@ def fit(data_pars=None, compute_pars=None, out_pars=None, **kw):
     if "LGBM" in model.model_pars['model_class']:
         model.model.fit(Xtrain, ytrain, eval_set=[(Xtest, ytest)], **compute_pars.get("compute_pars", {}))
     else:
-        model.model.fit(Xtrain, ytrain, **compute_pars.get("compute_pars", {}))
+        model.model.fit(Xtrain)#, ytrain)#, **compute_pars.get("compute_pars", {}))
 
 
 def predict(Xpred=None, data_pars={}, compute_pars={}, out_pars={}, **kw):

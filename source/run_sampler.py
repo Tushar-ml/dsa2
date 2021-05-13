@@ -115,9 +115,10 @@ def map_model(model_name):
     except :
         ### All SKLEARN API
         ### ['ElasticNet', 'ElasticNetCV', 'LGBMRegressor', 'LGBMModel', 'TweedieRegressor', 'Ridge']:
-       mod    = 'models.model_sklearn'
+       mod    = 'models.model_sampler'
        modelx = importlib.import_module(mod)
-
+       print(dir(modelx))
+    
     return modelx
 
 
@@ -206,6 +207,7 @@ def train(model_dict, dfX, cols_family, post_process_fun):
         dfX2, y = modelx.transform((dfX[colsX], dfX[coly]),data_pars=data_pars, compute_pars=compute_pars)
         dfX2 = pd.DataFrame(dfX2, columns = colsX)
     else:
+        print(f'model_name:{model_file,model_name}')
         dfX2 = modelx.transform(dfX[colsX], data_pars=data_pars, compute_pars=compute_pars)
     # dfX2.index = dfX.index
 
@@ -254,8 +256,9 @@ def run_train(config_name, config_path="source/config_model.py", n_sample=5000,
     :param n_sample:
     :return:
     """
-    model_dict  = model_dict_load(model_dict, config_path, config_name, verbose=True)
-
+    
+    #metric_list              = compute_pars['metric_list']
+    #model_file               = model_pars.get('model_file',"model_sampler")
     m           = model_dict['global_pars']
     path_data_train   = m['path_data_train']
     path_train_X      = m.get('path_train_X', path_data_train + "/features.zip") #.zip

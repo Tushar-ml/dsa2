@@ -1,0 +1,8 @@
+feature,mean_importance
+Parch_bin,0.0
+Fare_bin,0.0
+Embarked_int,0.0
+SibSp_bin,0.11892368727381131
+Sex_int,0.30786679484732343
+Age_bin,0.3428267868795838
+Pclass_bin,0.3814723961481373

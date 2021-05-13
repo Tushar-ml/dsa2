@@ -1,0 +1,16 @@
+if (Sex_int <= 0.5) and (Age_bin > 0.5) and (Pclass_bin > 2.0) then class: 0 (proba: 86.14%) | based on 202 samples
+
+if (Sex_int > 0.5) and (Pclass_bin <= 6.5) and (Age_bin <= 6.5) then class: 1 (proba: 95.77%) | based on 71 samples
+
+if (Sex_int <= 0.5) and (Age_bin > 0.5) and (Pclass_bin <= 2.0) then class: 0 (proba: 68.09%) | based on 47 samples
+
+if (Sex_int > 0.5) and (Pclass_bin > 6.5) and (Embarked_int <= 0.5) then class: 0 (proba: 71.43%) | based on 42 samples
+
+if (Sex_int > 0.5) and (Pclass_bin > 6.5) and (Embarked_int > 0.5) then class: 1 (proba: 74.07%) | based on 27 samples
+
+if (Sex_int > 0.5) and (Pclass_bin <= 6.5) and (Age_bin > 6.5) then class: 1 (proba: 80.0%) | based on 5 samples
+
+if (Sex_int <= 0.5) and (Age_bin <= 0.5) and (SibSp_bin > 2.0) then class: 0 (proba: 66.67%) | based on 3 samples
+
+if (Sex_int <= 0.5) and (Age_bin <= 0.5) and (SibSp_bin <= 2.0) then class: 1 (proba: 100.0%) | based on 3 samples
+

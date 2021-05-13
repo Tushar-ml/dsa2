@@ -1,0 +1,8 @@
+feature,shap_importance
+Sex_int,0.2484286085339678
+Pclass_bin,0.14389321823736625
+Age_bin,0.03623346838247282
+Embarked_int,0.02005756307718834
+SibSp_bin,0.0
+Parch_bin,0.0
+Fare_bin,0.0
