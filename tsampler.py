@@ -172,15 +172,11 @@ def test_batch(nsample=1000):
                         )
 
 
-<<<<<<< HEAD
 ##################################################################################
 ########## Train #################################################################
 # def train_sampler(config=None, nsample=None):
 from core_run import train_sampler
 from pprint import pprint
-=======
-
->>>>>>> f7be6a6830400b2694bd4142f48034b3822a127b
 
 
 ###################################################################################
@@ -189,7 +185,6 @@ from pprint import pprint
 from core_run import preprocess
 
 
-<<<<<<< HEAD
    for m in ll :
     mdict['model_pars']['model_class'] = m[0]
     mdict['model_pars']['model_pars']  = m[1]
@@ -206,15 +201,6 @@ from core_run import preprocess
                         model_dict= mdict
                         # use_mlmflow       =  False
                         )
-=======
-
-
-##################################################################################
-########## Train #################################################################
-# train_sampler(config=None, nsample=None):
-from core_run import train_sampler as train
-
->>>>>>> f7be6a6830400b2694bd4142f48034b3822a127b
 
 
 ####################################################################################
@@ -227,14 +213,8 @@ from core_run import transform
 if __name__ == "__main__":
     from pyinstrument import Profiler;  profiler = Profiler() ; profiler.start()
     import fire
-<<<<<<< HEAD
     fire.Fire(test_batch)
     
-=======
-    fire.Fire()
-    profiler.stop() ; print(profiler.output_text(unicode=True, color=True))
-
->>>>>>> f7be6a6830400b2694bd4142f48034b3822a127b
 
 
 
