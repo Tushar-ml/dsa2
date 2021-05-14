@@ -220,3 +220,4 @@ mlflow_local.db
 /source/models/ztmp2/model_functions_3.py
 /source/models/ztmp_checkpoint
 /source/models/data/input/ztest/fake
+./.history
