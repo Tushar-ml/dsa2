@@ -235,3 +235,4 @@ mlflow_local.db
 /example/data/output/titanic/config_sampler/features_store/coly
 /example/data/output/titanic/config_sampler/features_store/dfX
 /data/output
+./.history

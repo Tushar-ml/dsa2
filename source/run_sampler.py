@@ -165,7 +165,7 @@ def train(model_dict, dfX, cols_family, post_process_fun):
         dfX2, y = modelx.transform((dfX[colsX], dfX[coly]),data_pars=data_pars, compute_pars=compute_pars)
         dfX2    = pd.DataFrame(dfX2, columns = colsX)
     else:
-        print(f'model_name:{model_file,model_name}')
+        
         dfX2 = modelx.transform(dfX[colsX], data_pars=data_pars, compute_pars=compute_pars)
     # dfX2.index = dfX.index
 
