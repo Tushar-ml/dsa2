@@ -122,33 +122,38 @@ def data_load_memory(dfX=None):
 
 
 
+
 def data_load_memory(dfX=None):
     """
-        dfX str, pd.DataFrame,   Spark DataFrame
+        dfX =  pd.DataFrame,  
+               string path, 
+               dict
     """
     if isinstance(dfX, pd.DataFrame):
        return dfX
 
     if isinstance(dfX, tuple):
-       if isintance(dfX[1], list)
+       if isinstance(dfX[1], list):
             cols = dfX[1]
             if isinstance(dfX[0], pd.DataFrame) :
                 return dfX[0][cols]
 
             if isinstance(dfX[0], str) :
+                from utilmy import pd_read_file
                 path = dfX[0]
                 dfX = pd_read_file( path + "/*.parquet" )
                 dfX = dfX[cols]
                 return dfX
 
-       if isintance(dfX[1], dict)
+       if isinstance(dfX[1], dict):
             dd   = dfX[1]
-            cols = dd.get('cols', None)
+            cols = dd.get('columns', None)
 
             if isinstance(dfX[0], pd.DataFrame) :
                 return dfX[0][cols]
 
             if isinstance(dfX[0], str) :
+                from utilmy import pd_read_file
                 path = dfX[0]
                 dfX  = pd_read_file( path + "/*.parquet" )
                 dfX  = dfX[cols]
@@ -156,12 +161,11 @@ def data_load_memory(dfX=None):
 
 
     if isinstance(dfX, str):
+        from utilmy import pd_read_file
         path = dfX
         path = dfX[0]
         dfX  = pd_read_file( path + "/*.parquet" )        
         return dfX
-
-
 
 
 def predict(Xpred=None, data_pars={}, compute_pars={}, out_pars={}, **kw):
@@ -170,7 +174,7 @@ def predict(Xpred=None, data_pars={}, compute_pars={}, out_pars={}, **kw):
     if Xpred is None:
         Xpred = get_dataset2(data_pars, task_type="predict")
     else :
-        Xpred = data_load_memory(Xpred)  #### Iterator
+        Xpred = data_load_memory(Xpred)  #### 
          
         if data_pars.get('type', 'pandas') in ['pandas', 'ram'] and isinstance(Xpred, pd.DataFrame):
             Xpred,_ = get_dataset_split_for_model_pandastuple(Xpred, ytrain=None, data_pars= data_pars, )

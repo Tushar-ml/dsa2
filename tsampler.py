@@ -4,9 +4,6 @@
 ### Usage:
   python tsampler.py  train_sampler        --config  config_sampler
   python tsampler.py  transform_sampler    --config  config_sampler
-
-
-
 """
 import warnings, copy, os, sys
 warnings.filterwarnings("ignore")
@@ -216,6 +213,3 @@ if __name__ == "__main__":
     import fire
     fire.Fire(test_batch)
     
-
-
-

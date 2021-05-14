@@ -113,9 +113,7 @@ def predict(model_name, path_model, dfX, cols_family, model_dict):
     log2("#### modelx\n", modelx.model)
 
     log("### Prediction  ###################################################")
-    dfX    =  data_load_memory(dfX)
-    dfX  = dfX.reindex(columns=colsX)   #reindex included
-    ypred_tuple = modelx.predict(dfX, data_pars    = model_dict['data_pars'],
+    ypred_tuple = modelx.predict((dfX,{'columns':colsX}), data_pars    = model_dict['data_pars'],
                                       compute_pars = model_dict['compute_pars'])
     log2('ypred shape', str(ypred_tuple)[:100] )
     return ypred_tuple
@@ -128,12 +126,15 @@ def data_load_memory(dfX):
     return:
         dfX: df or type
     """
+    import pandas as pd
     if isinstance(dfX, str):
         import glob
         from utilmy import pd_read_file
         path = dfX
         dfX = pd_read_file( dfX + "/*.parquet" )
         return dfX
+    if isinstance(dfX, pd.DataFrame):
+        assert len(dfX) > 0, "Empty Dataframe"
     return dfX
         
         
@@ -183,8 +184,8 @@ def run_predict(config_name, config_path, n_sample=-1,
     ypred, yproba    = predict(model_class, path_model, dfX, cols, model_dict)
 
     post_process_fun        = model_dict['model_pars']['post_process_fun']
-    df[ coly + "_pred"]     = ypred
-    df[ coly + "_pred"]     = df[coly + '_pred'].apply(lambda  x : post_process_fun(x) )
+    df[coly + "_pred"]     = ypred
+    df[coly + "_pred"]     = df[coly + '_pred'].apply(lambda  x : post_process_fun(x) )
     if yproba is not None :
        df[ coly + "_pred_proba"] = yproba
 
