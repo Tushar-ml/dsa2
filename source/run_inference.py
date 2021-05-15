@@ -76,8 +76,6 @@ def map_model(model_name):
        modelx = importlib.import_module(mod)
 
     except :
-        ### All SKLEARN API
-        ### ['ElasticNet', 'ElasticNetCV', 'LGBMRegressor', 'LGBMModel', 'TweedieRegressor', 'Ridge']:
        mod    = 'models.model_sklearn'
        modelx = importlib.import_module(mod)
 
@@ -114,7 +112,8 @@ def predict(model_name, path_model, dfX, cols_family, model_dict):
 
     log("### Prediction  ###################################################")
     ypred_tuple = modelx.predict((dfX,{'columns':colsX}), data_pars    = model_dict['data_pars'],
-                                      compute_pars = model_dict['compute_pars'])
+                                 compute_pars = model_dict['compute_pars'])
+
     log2('ypred shape', str(ypred_tuple)[:100] )
     return ypred_tuple
 
@@ -164,7 +163,7 @@ def run_predict(config_name, config_path, n_sample=-1,
     df               = load_dataset(path_data, path_data_y=None, colid=colid, n_sample=n_sample)
     dfX, cols        = preprocess(df, path_pipeline, preprocess_pars=pars, model_dict=model_dict)
     coly = cols["coly"]
-
+    ### dfX = path_or_DataFrame
 
     log("#### Extract column names  #########################################################")
     ### Actual column names for Model Input :  label y and Input X (colnum , colcat), remove duplicate names
@@ -200,6 +199,34 @@ def run_predict(config_name, config_path, n_sample=-1,
     log("###########  Export Specific ######################################################")
     df[cols["coly"]] = ypred
     df[[cols["coly"]]].to_csv(f"{path_output}/pred_only.csv")
+
+
+
+
+
+
+def run_predict_batch(config_name, config_path, n_sample=-1,
+                      path_data=None, path_output=None, pars:dict=None, model_dict=None):
+
+    log("#### Run predict  ##############################################################")
+    model_dict = model_dict_load(model_dict, config_path, config_name, verbose=True)
+    model_class      = model_dict['model_pars']['model_class']
+
+    m                = model_dict['global_pars']
+    path_data        = m['path_pred_data']   if path_data   is None else path_data
+    #path_pipeline    = m['path_pred_pipeline']    #   path_output + "/pipeline/" )
+    #path_model       = m['path_pred_model']
+    #path_output      = m['path_pred_output'] if path_output is None else path_output
+    log(path_data)
+
+    log("#### Run preprocess  ##########################################################")
+    import glob
+    path_data_list = glob.glob(path_data + "/*.parquet")
+    for path_data_i in path_data_list :
+        log(path_data)
+        run_predict(config_name, config_path, n_sample,
+                    path_data_i, path_output, pars, model_dict)
+
 
 
 

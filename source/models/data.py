@@ -12,6 +12,14 @@ import os, sys,copy, glob, pathlib, pprint, json, pandas as pd, numpy as np, sci
 from utilmy import pd_read_file
 
 
+def log(*s):
+    print(*s)
+
+
+def log2(*s):
+    print(*s)
+
+
 
 def data_load_memory(dfX=None, nsample=-1):
     """
@@ -22,9 +30,9 @@ def data_load_memory(dfX=None, nsample=-1):
        return dfX
 
     if isinstance(dfX, tuple):
-       if isintance(dfX[1], list):
+       if isinstance(dfX[1], list):
             cols = dfX[1]
-            if isinstance(dfX[0], pd.DataFrame):
+            if isinstance(dfX[0], pd.DataFrame) :
                 return dfX[0][cols]
 
             if isinstance(dfX[0], str) :
@@ -33,7 +41,7 @@ def data_load_memory(dfX=None, nsample=-1):
                 dfX = dfX[cols]
                 return dfX
 
-       if isintance(dfX[1], dict):
+       if isinstance(dfX[1], dict):
             dd   = dfX[1]
             cols = dd.get('cols', None)
 
@@ -54,9 +62,6 @@ def data_load_memory(dfX=None, nsample=-1):
         return dfX
 
 
-
-
-
 def data_load_memory_iterator(dfX=None, nsample=-1):
     """
         dfX str, pd.DataFrame,   Spark DataFrame
@@ -73,34 +78,7 @@ def data_load_memory_iterator(dfX=None, nsample=-1):
         flist = glob.glob( path + "/*.parquet" )
         for fi in flist :
            dfXi  = pd_read_file(fi , nrows= nsample )        
-           yield dfX
-
-    if isinstance(dfX, tuple):
-       if isintance(dfX[1], list):
-            cols = dfX[1]
-            if isinstance(dfX[0], pd.DataFrame) :
-                return dfX[0][cols]
-
-            if isinstance(dfX[0], str) :
-                path = dfX[0]
-                dfX = pd_read_file( path + "/*.parquet" , nrows= nsample)
-                dfX = dfX[cols]
-                return dfX
-
-       if isintance(dfX[1], dict):
-            dd   = dfX[1]
-            cols = dd.get('cols', None)
-
-            if isinstance(dfX[0], pd.DataFrame) :
-                return dfX[0][cols]
-
-            if isinstance(dfX[0], str) :
-                path = dfX[0]
-                flist 
-                dfX  = pd_read_file( path + "/*.parquet" , nrows= nsample)
-                dfX  = dfX[cols]
-                return dfX
-
+           yield dfXi
 
 
 def data_save(dfX=None, path=None, fname='file'):
@@ -111,17 +89,18 @@ def data_save(dfX=None, path=None, fname='file'):
     flist = glob.glob(path + "/*.parquet")
     imax  = len(flist) + 1  ### Add file
     os.makedirs(path, exist_ok=True)
-    dfX[cols].to_parquet( path + f"/{fname}_{imax}.parquet" )
+    dfX.to_parquet( path + f"/{fname}_{imax}.parquet" )
 
 
 
 def data_split(dfX, data_pars, model_path, colsX, coly):
     """  Mini Batch data Split on Disk
     """
-    import pandas as pd
+    import pandas as pd,  glob
+    from utilmy import pd_read_file
 
-    ##### Dense Dict :  #################################################
-    if data_pars['data_type'] == 'ram':
+    if  isinstance(dfX, pd.DataFrame) and  data_pars['data_type'] == 'ram'  :
+        log2("##### Data Split in RAM  ###################################################")
         log2(dfX.shape)
         dfX    = dfX.sample(frac=1.0)
         itrain = int(0.6 * len(dfX))
@@ -134,24 +113,22 @@ def data_split(dfX, data_pars, model_path, colsX, coly):
                                'Xval'   : dfX[colsX].iloc[ival:, :],
                                'yval'   : dfX[coly].iloc[ival:],
                              }
-        return data_pars
-
-    ##### Split on  Path  ###############################################
-    m = { 'Xtrain' : model_path + "train/Xtrain/" ,
-          'ytrain' : model_path + "train/ytrain/",
-          'Xtest'  : model_path + "train/Xtest/",
-          'ytest'  : model_path + "train/ytest/",
-
-          'Xval'   : model_path + "train/Xval/",
-          'yval'   : model_path + "train/yval/",
-        }
-    for key, path in m.items() :
-       os.makedirs(path, exist_ok =True)
+        return data_pars, ival
 
 
     if isinstance(dfX, str) :
-        import glob
-        from utilmy import pd_read_file
+        log2("##### Data on Disk Split ############################################")
+        m = { 'Xtrain' : model_path + "train/Xtrain/" ,
+              'ytrain' : model_path + "train/ytrain/",
+              'Xtest'  : model_path + "train/Xtest/",
+              'ytest'  : model_path + "train/ytest/",
+
+              'Xval'   : model_path + "train/Xval/",
+              'yval'   : model_path + "train/yval/",
+            }
+        for key, path in m.items() :
+           os.makedirs(path, exist_ok =True)
+
         flist = glob.glob(dfX + "*")
         flist =  [t for  t in flist ]  ### filter
         for i, fi in enumerate(flist) :
@@ -160,38 +137,41 @@ def data_split(dfX, data_pars, model_path, colsX, coly):
             dfX    = dfXi.sample(frac=1.0)
             itrain = int(0.6 * len(dfXi))
             ival   = int(0.8 * len(dfXi))
-            dfXi[colsX].iloc[:itrain, :].to_parquet(m['Xtrain']  + f"/file_{i}.parquet" )
-            dfXi[[coly]].iloc[:itrain].to_parquet(  m['ytrain']  + f"/file_{i}.parquet" )
+            dfXi[colsX].iloc[:itrain, :].to_parquet(m['Xtrain']     + f"/file_{i}.parquet" )
+            dfXi[[coly]].iloc[:itrain].to_parquet(  m['ytrain']     + f"/file_{i}.parquet" )
 
             dfXi[colsX].iloc[itrain:ival, :].to_parquet(m['Xtest']  + f"/file_{i}.parquet" )
             dfXi[[coly]].iloc[itrain:ival].to_parquet(  m['ytest']  + f"/file_{i}.parquet" )
 
-            dfXi[colsX].iloc[ival:, :].to_parquet(      m['Xval']  + f"/file_{i}.parquet" )
-            dfXi[[coly]].iloc[ival:].to_parquet(        m['yval']  + f"/file_{i}.parquet"  )
+            dfXi[colsX].iloc[ival:, :].to_parquet(      m['Xval']   + f"/file_{i}.parquet" )
+            dfXi[[coly]].iloc[ival:].to_parquet(        m['yval']   + f"/file_{i}.parquet" )
+
+        #### date_type :  'ram', 'pandas', tf_data,  torch_data,  #####################
+        data_pars['data_type'] = data_pars.get('data_type', 'ram')  ### Tf dataset, pytorch
+        data_pars['train']     = m
+        ival = 0
+        return data_pars, ival
 
 
+
+
+
+"""
     if isinstance(dfX, pd.DataFrame):
         log2(dfX.shape)
         dfX    = dfX.sample(frac=1.0)
         itrain = int(0.6 * len(dfX))
         ival   = int(0.8 * len(dfX))
-        dfX[colsX].iloc[:itrain, :].to_parquet(m['Xtrain']  + "/file_01.parquet" )
-        dfX[[coly]].iloc[:itrain].to_parquet(  m['ytrain']  + "/file_01.parquet" )
+        dfX[colsX].iloc[:itrain, :].to_parquet(m['Xtrain']     + "/file_01.parquet" )
+        dfX[[coly]].iloc[:itrain].to_parquet(  m['ytrain']     + "/file_01.parquet" )
 
         dfX[colsX].iloc[itrain:ival, :].to_parquet(m['Xtest']  + "/file_01.parquet" )
         dfX[[coly]].iloc[itrain:ival].to_parquet(  m['ytest']  + "/file_01.parquet" )
 
-        dfX[colsX].iloc[ival:, :].to_parquet(      m['Xval']  + "/file_01.parquet" )
+        dfX[colsX].iloc[ival:, :].to_parquet(      m['Xval']  + "/file_01.parquet"  )
         dfX[[coly]].iloc[ival:].to_parquet(        m['yval']  + "/file_01.parquet"  )
-
-
-    #### date_type :  'ram', 'pandas', tf_data,  torch_data,  #####################
-    data_pars['data_type'] = data_pars.get('data_type', 'ram')  ### Tf dataset, pytorch
-    data_pars['train']     = m
-    return data_pars
-
-
-
+        
+"""
 
 
 
