@@ -22,29 +22,29 @@ def data_load_memory(dfX=None, nsample=-1):
        return dfX
 
     if isinstance(dfX, tuple):
-       if isintance(dfX[1], list)
+       if isintance(dfX[1], list):
             cols = dfX[1]
-            if isinstance(dfX[0], pd.DataFrame) :
-            	return dfX[0][cols]
+            if isinstance(dfX[0], pd.DataFrame):
+                return dfX[0][cols]
 
             if isinstance(dfX[0], str) :
-            	path = dfX[0]
-            	dfX = pd_read_file( path + "/*.parquet" , nrows= nsample)
+                path = dfX[0]
+                dfX = pd_read_file( path + "/*.parquet" , nrows= nsample)
                 dfX = dfX[cols]
-            	return dfX
+                return dfX
 
-       if isintance(dfX[1], dict)
+       if isintance(dfX[1], dict):
             dd   = dfX[1]
             cols = dd.get('cols', None)
 
             if isinstance(dfX[0], pd.DataFrame) :
-            	return dfX[0][cols]
+                return dfX[0][cols]
 
             if isinstance(dfX[0], str) :
-            	path = dfX[0]
-            	dfX  = pd_read_file( path + "/*.parquet" , nrows= nsample)
+                path = dfX[0]
+                dfX  = pd_read_file( path + "/*.parquet" , nrows= nsample)
                 dfX  = dfX[cols]
-            	return dfX
+                return dfX
 
 
     if isinstance(dfX, str):
@@ -76,30 +76,30 @@ def data_load_memory_iterator(dfX=None, nsample=-1):
            yield dfX
 
     if isinstance(dfX, tuple):
-       if isintance(dfX[1], list)
+       if isintance(dfX[1], list):
             cols = dfX[1]
             if isinstance(dfX[0], pd.DataFrame) :
-            	return dfX[0][cols]
+                return dfX[0][cols]
 
             if isinstance(dfX[0], str) :
-            	path = dfX[0]
-            	dfX = pd_read_file( path + "/*.parquet" , nrows= nsample)
+                path = dfX[0]
+                dfX = pd_read_file( path + "/*.parquet" , nrows= nsample)
                 dfX = dfX[cols]
-            	return dfX
+                return dfX
 
-       if isintance(dfX[1], dict)
+       if isintance(dfX[1], dict):
             dd   = dfX[1]
             cols = dd.get('cols', None)
 
             if isinstance(dfX[0], pd.DataFrame) :
-            	return dfX[0][cols]
+                return dfX[0][cols]
 
             if isinstance(dfX[0], str) :
-            	path = dfX[0]
-            	flist 
-            	dfX  = pd_read_file( path + "/*.parquet" , nrows= nsample)
+                path = dfX[0]
+                flist 
+                dfX  = pd_read_file( path + "/*.parquet" , nrows= nsample)
                 dfX  = dfX[cols]
-            	return dfX
+                return dfX
 
 
 
