@@ -9,6 +9,7 @@ Methoe to process data : load in memory, split, or save
 
 """
 import os, sys,copy, glob, pathlib, pprint, json, pandas as pd, numpy as np, scipy as sci, sklearn
+from IPython.terminal.ipapp import TerminalIPythonApp
 from utilmy import pd_read_file
 
 
@@ -56,8 +57,10 @@ def data_load_memory(dfX=None, nsample=-1):
 
 
     if isinstance(dfX, str):
+        
         path = dfX
-        path = dfX[0]
+        #path = dfX[0]
+        print(path)
         dfX  = pd_read_file( path + "/*.parquet", nrows= nsample )        
         return dfX
 
@@ -80,6 +83,29 @@ def data_load_memory_iterator(dfX=None, nsample=-1):
            dfXi  = pd_read_file(fi , nrows= nsample )        
            yield dfXi
 
+def data_generator(dfX,method='pandas',nsample=-1):
+    '''
+        This Function will take dfx as str or pandas dataframe and yield dataframes in chunks so loading of 
+        whole dataset is not required in the memory
+
+    '''
+    
+    if isinstance(dfX,pd.DataFrame):
+        return dfX
+    
+    if method=='pandas':
+        if isinstance(dfX,str):
+            if nsample<0:
+                nsample=None
+            chunks = pd.read_csv(dfX,chunksize=nsample)
+            chunks = iter(chunks)
+            return chunks
+    elif method=='dask':
+        from dask import dataframe as dd
+        dask_df = dd.read_csv(dfX)
+        return dask_df
+    
+
 
 def data_save(dfX=None, path=None, fname='file'):
     """
@@ -93,18 +119,21 @@ def data_save(dfX=None, path=None, fname='file'):
 
 
 
-def data_split(dfX, data_pars, model_path, colsX, coly):
+def data_split(dfX, data_pars):
     """  Mini Batch data Split on Disk
     """
     import pandas as pd,  glob
     from utilmy import pd_read_file
-
+    model_path = data_pars.get('model_path',os.getcwd())
+    colsX = data_pars.get('colsX',[])
+    coly = data_pars.get('coly','')
+    split = data_pars.get('split',0.8)
     if  isinstance(dfX, pd.DataFrame) and  data_pars['data_type'] == 'ram'  :
         log2("##### Data Split in RAM  ###################################################")
         log2(dfX.shape)
         dfX    = dfX.sample(frac=1.0)
-        itrain = int(0.6 * len(dfX))
-        ival   = int(0.8 * len(dfX))
+        itrain = int(split * len(dfX))
+        ival   = int(1-split* len(dfX))
         data_pars['train'] = { 'Xtrain' : dfX[colsX].iloc[:itrain, :],
                                'ytrain' : dfX[coly].iloc[:itrain],
                                'Xtest'  : dfX[colsX].iloc[itrain:ival, :],
@@ -129,14 +158,14 @@ def data_split(dfX, data_pars, model_path, colsX, coly):
         for key, path in m.items() :
            os.makedirs(path, exist_ok =True)
 
-        flist = glob.glob(dfX + "*")
-        flist =  [t for  t in flist ]  ### filter
+        #flist = glob.glob(dfX + "*")
+        flist =  [dfX ]  ### filter
         for i, fi in enumerate(flist) :
             dfXi = pd_read_file(fi)
             log2(dfXi.shape)
             dfX    = dfXi.sample(frac=1.0)
-            itrain = int(0.6 * len(dfXi))
-            ival   = int(0.8 * len(dfXi))
+            itrain = int(split * len(dfXi))
+            ival   = int(1-split * len(dfXi))
             dfXi[colsX].iloc[:itrain, :].to_parquet(m['Xtrain']     + f"/file_{i}.parquet" )
             dfXi[[coly]].iloc[:itrain].to_parquet(  m['ytrain']     + f"/file_{i}.parquet" )
 
@@ -152,6 +181,68 @@ def data_split(dfX, data_pars, model_path, colsX, coly):
         ival = 0
         return data_pars, ival
 
+import os
+
+def test1():
+    '''
+        This Test has been created for working of Data Split Method
+    '''
+    print(f'OS Current Working Directory:{os.getcwd()}')
+    df_pandas = pd.read_csv('datasets/petfinder_mini.csv') #Pass it as Pandas Dataframe
+    df_path = 'datasets/petfinder_mini.csv' #Pass it as path to file.
+    
+    data_pars = {
+
+        'data_type':'ram',
+        'colsX':['Age','Breed1'],
+        'coly':'Type',
+        'model_path':'/home/tushargoel/Desktop/dsa2',
+
+    }
+    
+    data = data_split(df_path,data_pars)
+    print(data)
+
+def test2():
+    '''
+        This Test has been created for working of Data Load in Memory Method
+    '''
+    df_pandas = pd.read_csv('datasets/petfinder_mini.csv') #Pass it as Pandas Dataframe
+    df_path =  'train/Xtrain' #Pass the parquet files folder as path
+
+    data = data_load_memory(df_path)
+    print(data)
+
+def test3():
+    '''
+        Loading of Huge Data Files in chunks using pandas and Dask
+    '''
+
+    method='dask'
+    df_path = 'datasets/petfinder_mini.csv'
+
+    if method=='pandas':
+        
+        iterations = data_generator(df_path,method,10)
+
+        while True:
+            try:
+                df = next(iterations)
+                print(df)
+            except:
+                break
+    
+    elif method=='dask':
+        
+        df = data_generator(df_path,method)
+        print(df.head())
+        
+
+
+
+if __name__ == '__main__':
+    import fire 
+    fire.Fire(test3)
 
 
 
