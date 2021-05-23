@@ -89,21 +89,24 @@ def data_generator(dfX,method='pandas',nsample=-1):
         whole dataset is not required in the memory
 
     '''
+
     
     if isinstance(dfX,pd.DataFrame):
         return dfX
-    
-    if method=='pandas':
-        if isinstance(dfX,str):
-            if nsample<0:
-                nsample=None
-            chunks = pd.read_csv(dfX,chunksize=nsample)
-            chunks = iter(chunks)
-            return chunks
-    elif method=='dask':
-        from dask import dataframe as dd
-        dask_df = dd.read_csv(dfX)
-        return dask_df
+    elif isinstance(dfX,str):
+        files = glob.glob(dfX+'/*.csv')
+        print(files)
+        if method=='pandas':
+            for file in files:
+                if nsample<0:
+                    nsample=None
+                chunks = pd.read_csv(file,chunksize=nsample)
+                yield iter(chunks)
+        elif method=='dask':
+            from dask import dataframe as dd
+            for file in files:
+                dask_df = dd.read_csv(file)
+                yield dask_df
     
 
 
@@ -215,27 +218,32 @@ def test2():
 
 def test3():
     '''
-        Loading of Huge Data Files in chunks using pandas and Dask
+        Loading of Huge DataFrame Files in chunks using pandas and Dask
     '''
 
     method='dask'
-    df_path = 'datasets/petfinder_mini.csv'
+    df_path = 'datasets'
 
     if method=='pandas':
         
-        iterations = data_generator(df_path,method,10)
-
+        iterations = data_generator(df_path,method,1000)
+        iterations = next(iterations)
         while True:
             try:
-                df = next(iterations)
-                print(df)
+                print(next(iterations))
             except:
                 break
     
     elif method=='dask':
         
         df = data_generator(df_path,method)
-        print(df.head())
+        iterations = df 
+        while True:
+            try:
+                print(next(iterations).head(1000))
+            except:
+                break
+        
         
 
 
